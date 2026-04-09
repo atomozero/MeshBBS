@@ -117,6 +117,32 @@ button:hover { background: #2563eb; }
 .error { color: #f87171; font-size: 0.85rem; margin-bottom: 0.75rem; text-align: center; }
 .footer { text-align: center; color: #475569; font-size: 0.75rem; margin-top: 2rem; padding: 1rem; }
 
+/* Connection indicator */
+.conn-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.conn-dot.on { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+.conn-dot.off { background: #f87171; box-shadow: 0 0 6px #f87171; }
+.conn-status { font-size: 0.75rem; color: #94a3b8; margin-right: 1rem; }
+
+/* Action buttons */
+.btn-sm { padding: 0.2rem 0.5rem; font-size: 0.7rem; border-radius: 4px; border: none;
+          cursor: pointer; font-weight: 600; width: auto; display: inline-block; margin: 1px; }
+.btn-red { background: #7f1d1d; color: #f87171; }
+.btn-red:hover { background: #991b1b; }
+.btn-green { background: #166534; color: #4ade80; }
+.btn-green:hover { background: #15803d; }
+.btn-yellow { background: #713f12; color: #fbbf24; }
+.btn-yellow:hover { background: #854d0e; }
+.btn-blue { background: #1e3a5f; color: #60a5fa; }
+.btn-blue:hover { background: #1e40af; }
+td.actions { white-space: nowrap; }
+
+/* Toast notification */
+.toast { position: fixed; bottom: 1rem; right: 1rem; background: #1e293b; border: 1px solid #334155;
+         padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.85rem; z-index: 1000;
+         transition: opacity 0.3s; }
+.toast.success { border-color: #166534; }
+.toast.error { border-color: #7f1d1d; }
+
 /* Mobile responsive */
 @media (max-width: 640px) {
     nav .hamburger { display: block; }
@@ -129,12 +155,18 @@ button:hover { background: #2563eb; }
     .container { padding: 0.75rem; }
     table { min-width: 400px; }
     th, td { padding: 0.4rem; font-size: 0.75rem; }
+    .conn-status { display: none; }
+    .btn-sm { font-size: 0.65rem; padding: 0.15rem 0.35rem; }
 }
 """
 
 
 def page(title, content, active=""):
     """Wrap content in base HTML template."""
+    radio = _get_radio_status()
+    conn_class = "on" if radio["connected"] else "off"
+    conn_text = "Online" if radio["connected"] else "Offline"
+
     def nav_link(href, label, key):
         cls = "color: #e2e8f0; font-weight: 600;" if active == key else ""
         return f'<a href="{href}" style="{cls}">{label}</a>'
@@ -150,7 +182,8 @@ def page(title, content, active=""):
 <body>
 <nav>
 <div class="inner">
-  <span class="brand">MeshBBS</span>
+  <span class="brand"><span id="conn-dot" class="conn-dot {conn_class}"></span>MeshBBS</span>
+  <span class="conn-status" id="conn-text">{conn_text}</span>
   <button class="hamburger" onclick="document.getElementById('nav-links').classList.toggle('open')">&#9776;</button>
   <div class="links" id="nav-links">
     {nav_link('/', 'Dashboard', 'dashboard')}
@@ -183,7 +216,7 @@ def page(title, content, active=""):
   }}
   setInterval(tick, 1000);
 
-  function refresh() {{
+  function refreshContent() {{
     fetch(path, {{credentials: 'same-origin'}})
       .then(function(r) {{ if (r.ok) return r.text(); throw r; }})
       .then(function(html) {{
@@ -193,7 +226,21 @@ def page(title, content, active=""):
       }})
       .catch(function() {{}});
   }}
-  setInterval(refresh, 15000);
+  setInterval(refreshContent, 15000);
+
+  // Update connection indicator
+  function refreshConn() {{
+    fetch('/api/health', {{credentials: 'same-origin'}})
+      .then(function(r) {{ return r.json(); }})
+      .then(function(d) {{
+        var dot = document.getElementById('conn-dot');
+        var txt = document.getElementById('conn-text');
+        if (dot) {{ dot.className = 'conn-dot ' + (d.radio_connected ? 'on' : 'off'); }}
+        if (txt) {{ txt.textContent = d.radio_connected ? 'Online' : 'Offline'; }}
+      }})
+      .catch(function() {{}});
+  }}
+  setInterval(refreshConn, 10000);
 }})();
 </script>
 </body>
@@ -438,25 +485,10 @@ def partial_messages():
 def partial_users():
     """Return users table HTML fragment."""
     users = _get_users()
-    rows = ""
-    for u in users:
-        status = ""
-        if u.get("banned"):
-            status = '<span class="badge badge-red">Bannato</span>'
-        elif u.get("muted"):
-            status = '<span class="badge badge-yellow">Mutato</span>'
-        elif u.get("admin"):
-            status = '<span class="badge badge-green">Admin</span>'
-        rows += f"""<tr>
-            <td>{u['name']}</td>
-            <td><code>{u['key'][:12]}...</code></td>
-            <td>{status}</td>
-            <td>{u['messages']}</td>
-            <td>{u['last_seen']}</td>
-        </tr>"""
+    rows = _render_user_rows(users)
     return f"""<table>
-    <tr><th>Nome</th><th>Chiave</th><th>Stato</th><th>Messaggi</th><th>Ultimo accesso</th></tr>
-    {rows if rows else '<tr><td colspan="5" style="text-align:center;color:#64748b">Nessun utente</td></tr>'}
+    <tr><th>Nome</th><th>Chiave</th><th>Stato</th><th>Msg</th><th>Visto</th><th>Azioni</th></tr>
+    {rows if rows else '<tr><td colspan="6" style="text-align:center;color:#64748b">Nessun utente</td></tr>'}
     </table>"""
 
 
@@ -519,7 +551,42 @@ def messages_page():
 @require_auth
 def users_page():
     users = _get_users()
+    rows = _render_user_rows(users)
 
+    return page("Utenti", f"""
+        <h1 style="margin:1rem 0">Utenti
+            <span id="live-indicator" class="badge badge-green" style="font-size:0.6rem;vertical-align:middle;opacity:0.5">LIVE</span>
+        </h1>
+        <div id="toast-area"></div>
+        <div class="card"><div id="live-content">
+        <table>
+        <tr><th>Nome</th><th>Chiave</th><th>Stato</th><th>Msg</th><th>Visto</th><th>Azioni</th></tr>
+        {rows if rows else '<tr><td colspan="6" style="text-align:center;color:#64748b">Nessun utente</td></tr>'}
+        </table>
+        </div></div>
+        <script>
+        function userAction(key, action) {{
+            if (!confirm('Confermi ' + action + ' per questo utente?')) return;
+            fetch('/api/user/' + key + '/' + action, {{method:'POST', credentials:'same-origin'}})
+            .then(function(r) {{ return r.json(); }})
+            .then(function(d) {{
+                var ta = document.getElementById('toast-area');
+                var cls = d.ok ? 'toast success' : 'toast error';
+                ta.innerHTML = '<div class="' + cls + '">' + d.message + '</div>';
+                setTimeout(function(){{ ta.innerHTML = ''; }}, 3000);
+                // Refresh user list
+                fetch('/api/partial/users', {{credentials:'same-origin'}})
+                .then(function(r){{ return r.text(); }})
+                .then(function(h){{ document.getElementById('live-content').innerHTML = h; }});
+            }})
+            .catch(function(){{ alert('Errore di rete'); }});
+        }}
+        </script>
+    """, active="users")
+
+
+def _render_user_rows(users):
+    """Render user table rows with action buttons."""
     rows = ""
     for u in users:
         status = ""
@@ -529,26 +596,33 @@ def users_page():
             status = '<span class="badge badge-yellow">Mutato</span>'
         elif u.get("admin"):
             status = '<span class="badge badge-green">Admin</span>'
+        elif u.get("moderator"):
+            status = '<span class="badge badge-blue">Mod</span>'
+
+        # Action buttons based on current status
+        key = u['key']
+        actions = ""
+        if u.get("banned"):
+            actions = f'<button class="btn-sm btn-green" onclick="userAction(\'{key}\',\'unban\')">Sbanna</button>'
+        elif u.get("muted"):
+            actions = f'<button class="btn-sm btn-green" onclick="userAction(\'{key}\',\'unmute\')">Smuta</button>'
+        else:
+            if not u.get("admin"):
+                actions = (
+                    f'<button class="btn-sm btn-red" onclick="userAction(\'{key}\',\'ban\')">Ban</button>'
+                    f'<button class="btn-sm btn-yellow" onclick="userAction(\'{key}\',\'mute\')">Mute</button>'
+                    f'<button class="btn-sm btn-blue" onclick="userAction(\'{key}\',\'kick\')">Kick</button>'
+                )
 
         rows += f"""<tr>
             <td>{u['name']}</td>
-            <td><code>{u['key'][:12]}...</code></td>
+            <td><code>{key[:8]}...</code></td>
             <td>{status}</td>
             <td>{u['messages']}</td>
             <td>{u['last_seen']}</td>
+            <td class="actions">{actions}</td>
         </tr>"""
-
-    return page("Utenti", f"""
-        <h1 style="margin:1rem 0">Utenti
-            <span id="live-indicator" class="badge badge-green" style="font-size:0.6rem;vertical-align:middle;opacity:0.5">LIVE</span>
-        </h1>
-        <div class="card"><div id="live-content">
-        <table>
-        <tr><th>Nome</th><th>Chiave</th><th>Stato</th><th>Messaggi</th><th>Ultimo accesso</th></tr>
-        {rows if rows else '<tr><td colspan="5" style="text-align:center;color:#64748b">Nessun utente</td></tr>'}
-        </table>
-        </div></div>
-    """, active="users")
+    return rows
 
 
 # ---------------------------------------------------------------
@@ -580,6 +654,65 @@ def logs_page():
         </table>
         </div></div>
     """, active="logs")
+
+
+# ---------------------------------------------------------------
+# Admin actions API
+# ---------------------------------------------------------------
+
+@app.route("/api/user/<key>/<action>", method="POST")
+@require_auth
+def user_action(key, action):
+    """Execute admin action on a user."""
+    response.content_type = "application/json"
+
+    valid_actions = {"ban", "unban", "mute", "unmute", "kick", "unkick"}
+    if action not in valid_actions:
+        return json.dumps({"ok": False, "message": f"Azione '{action}' non valida"})
+
+    try:
+        from bbs.models.base import get_session
+        from bbs.models.user import User
+        from bbs.models.activity_log import ActivityLog, EventType, log_activity
+
+        with get_session() as session:
+            user = session.query(User).filter(User.public_key == key).first()
+            if not user:
+                return json.dumps({"ok": False, "message": "Utente non trovato"})
+
+            name = user.display_name
+
+            if action == "ban":
+                user.ban(reason="Bannato da admin web")
+                log_activity(session, EventType.USER_BANNED, user_key=key, details="Via web admin")
+            elif action == "unban":
+                user.unban()
+                log_activity(session, EventType.USER_UNBANNED, user_key=key, details="Via web admin")
+            elif action == "mute":
+                user.mute(reason="Mutato da admin web")
+                log_activity(session, EventType.USER_MUTED, user_key=key, details="Via web admin")
+            elif action == "unmute":
+                user.unmute()
+                log_activity(session, EventType.USER_UNMUTED, user_key=key, details="Via web admin")
+            elif action == "kick":
+                user.kick(minutes=60, reason="Kick da admin web")
+                log_activity(session, EventType.USER_KICKED, user_key=key, details="60 min via web admin")
+            elif action == "unkick":
+                user.unkick()
+                log_activity(session, EventType.USER_UNKICKED, user_key=key, details="Via web admin")
+
+            session.commit()
+
+            action_names = {
+                "ban": "bannato", "unban": "sbannato",
+                "mute": "mutato", "unmute": "smutato",
+                "kick": "kickato (60 min)", "unkick": "unkickato",
+            }
+            return json.dumps({"ok": True, "message": f"{name} {action_names[action]}"})
+
+    except Exception as e:
+        logger.error(f"Error executing user action {action} on {key[:8]}: {e}")
+        return json.dumps({"ok": False, "message": f"Errore: {str(e)}"})
 
 
 # ---------------------------------------------------------------
