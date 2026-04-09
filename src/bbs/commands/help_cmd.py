@@ -39,6 +39,10 @@ class HelpCommand(BaseCommand):
 
             if command_class:
                 command = command_class(self.session)
+                if command.admin_only and not ctx.is_admin:
+                    return CommandResult.fail(
+                        f"[BBS] Comando '!{cmd_name}' riservato agli admin"
+                    )
                 return CommandResult.ok(
                     f"[BBS] !{command.name}: {command.description}\n"
                     f"Uso: {command.usage}"
@@ -48,11 +52,24 @@ class HelpCommand(BaseCommand):
                     f"[BBS] Comando '!{cmd_name}' non trovato"
                 )
 
-        # List all commands
-        commands = CommandRegistry.get_public_commands()
-        cmd_list = " ".join(sorted([f"!{cmd.name}" for cmd in commands]))
+        # List commands based on user role
+        all_commands = CommandRegistry.get_public_commands()
 
-        return CommandResult.ok(
-            f"[BBS] Comandi: {cmd_list}\n"
-            f"Usa !help <cmd> per dettagli"
-        )
+        user_cmds = []
+        admin_cmds = []
+        for cmd in all_commands:
+            if cmd.admin_only:
+                admin_cmds.append(cmd)
+            else:
+                user_cmds.append(cmd)
+
+        lines = ["[BBS] Comandi:"]
+        lines.append(" ".join(sorted([f"!{c.name}" for c in user_cmds])))
+
+        if ctx.is_admin and admin_cmds:
+            lines.append("Admin:")
+            lines.append(" ".join(sorted([f"!{c.name}" for c in admin_cmds])))
+
+        lines.append("Usa !help <cmd> per dettagli")
+
+        return CommandResult.ok("\n".join(lines))

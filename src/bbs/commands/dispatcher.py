@@ -133,6 +133,8 @@ class CommandDispatcher:
             timestamp=datetime.utcnow(),
             hops=hops,
             rssi=rssi,
+            is_admin=user.is_admin,
+            is_moderator=user.is_moderator,
         )
 
         # Get command handler

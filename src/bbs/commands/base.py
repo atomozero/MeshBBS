@@ -24,6 +24,8 @@ class CommandContext:
     timestamp: datetime = field(default_factory=datetime.utcnow)
     hops: int = 0
     rssi: Optional[int] = None
+    is_admin: bool = False
+    is_moderator: bool = False
 
     @property
     def sender_display(self) -> str:
