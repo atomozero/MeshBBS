@@ -17,54 +17,25 @@ import uuid
 from .messages import Message, Advert, Ack
 from .protocol import PacketType, NodeType
 
-# Try to import meshcore library (the pip package, not this local module).
-# Our local package is also called "meshcore", so we temporarily adjust sys.path
-# to find the pip-installed version from site-packages.
+# Try to import meshcore library (the pip package).
+# The pip library is pre-loaded by the launcher as "meshcore_pip" in sys.modules
+# to avoid name conflict with this local package.
 MESHCORE_AVAILABLE = False
 MeshCore = None
 EventType = None
 
-try:
-    import importlib
-    import site
-
-    # Get site-packages paths where pip installs packages
-    _site_paths = site.getsitepackages() if hasattr(site, 'getsitepackages') else []
-    _user_site = site.getusersitepackages() if hasattr(site, 'getusersitepackages') else None
-    if _user_site:
-        _site_paths.append(_user_site)
-
-    # Also check venv site-packages
-    for p in sys.path:
-        if 'site-packages' in p and p not in _site_paths:
-            _site_paths.append(p)
-
-    # Try loading from site-packages directly
-    for sp in _site_paths:
-        _meshcore_init = os.path.join(sp, 'meshcore', '__init__.py')
-        if os.path.exists(_meshcore_init):
-            import importlib.util
-            _spec = importlib.util.spec_from_file_location(
-                "meshcore_lib", _meshcore_init,
-                submodule_search_locations=[os.path.join(sp, 'meshcore')]
-            )
-            _meshcore_lib = importlib.util.module_from_spec(_spec)
-            _spec.loader.exec_module(_meshcore_lib)
-
-            MeshCore = getattr(_meshcore_lib, 'MeshCore', None)
-            EventType = getattr(_meshcore_lib, 'EventType', None)
-
-            if MeshCore is not None:
-                MESHCORE_AVAILABLE = True
-                break
-
-    if not MESHCORE_AVAILABLE:
-        raise ImportError("MeshCore class not found in site-packages")
-
-except Exception as _e:
-    MESHCORE_AVAILABLE = False
-    MeshCore = None
-    EventType = None
+if "meshcore_pip" in sys.modules:
+    _mc = sys.modules["meshcore_pip"]
+    MeshCore = getattr(_mc, 'MeshCore', None)
+    EventType = getattr(_mc, 'EventType', None)
+    MESHCORE_AVAILABLE = MeshCore is not None
+elif "MESHCORE_AVAILABLE" not in dir():
+    # Fallback: try direct import (works when this module IS the pip package)
+    try:
+        from meshcore import MeshCore, EventType  # type: ignore
+        MESHCORE_AVAILABLE = True
+    except (ImportError, AttributeError):
+        pass
 
 # Handle import based on context (standalone vs package)
 try:

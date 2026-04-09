@@ -17,12 +17,32 @@ Usage:
 
 import asyncio
 import argparse
+import os
 import signal
 import sys
 from pathlib import Path
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
+
+# Pre-load the pip meshcore library before our local meshcore package
+# shadows it. Save it as "meshcore_pip" in sys.modules so connection.py
+# can find it without name conflicts.
+try:
+    import importlib.util, site
+    for _sp in (site.getsitepackages() if hasattr(site, 'getsitepackages') else []) + sys.path:
+        _mc_init = os.path.join(_sp, 'meshcore', '__init__.py') if 'site-packages' in _sp or 'dist-packages' in _sp else ''
+        if _mc_init and os.path.exists(_mc_init):
+            _spec = importlib.util.spec_from_file_location(
+                "meshcore_pip", _mc_init,
+                submodule_search_locations=[os.path.join(_sp, 'meshcore')]
+            )
+            _mc = importlib.util.module_from_spec(_spec)
+            sys.modules["meshcore_pip"] = _mc
+            _spec.loader.exec_module(_mc)
+            break
+except Exception:
+    pass
 
 from utils.config import Config, set_config
 from utils.logger import setup_logger, get_logger
