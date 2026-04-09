@@ -1,0 +1,37 @@
+{
+  "title": "Dashboard",
+  "subtitle": "Panoramica della tua rete MeshBBS",
+  "loading": "Caricamento dashboard...",
+  "errorLoading": "Errore nel caricamento della dashboard",
+  "stats": {
+    "totalUsers": "Utenti Totali",
+    "totalMessages": "Messaggi Totali",
+    "activeAreas": "Aree Attive",
+    "onlineNow": "Online Adesso",
+    "fromLastWeek": "{{value}}% dalla scorsa settimana"
+  },
+  "charts": {
+    "messageActivity": "Attività Messaggi",
+    "noData": "Nessun dato disponibile",
+    "periods": {
+      "7d": "7g",
+      "30d": "30g",
+      "90d": "90g"
+    }
+  },
+  "topPosters": {
+    "title": "Utenti Più Attivi",
+    "messages": "{{count}} messaggi",
+    "noData": "Ancora nessun dato"
+  },
+  "recentActivity": {
+    "title": "Attività Recente",
+    "noActivity": "Nessuna attività recente"
+  },
+  "systemStatus": {
+    "title": "Stato Sistema",
+    "bbsServer": "Server BBS",
+    "meshtasticConnection": "Connessione Meshtastic",
+    "uptime": "Uptime"
+  }
+}

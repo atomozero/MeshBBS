@@ -1,0 +1,51 @@
+{
+  "title": "Messages",
+  "subtitle": "View and manage BBS messages",
+  "loading": "Loading messages...",
+  "errorLoading": "Error loading messages",
+  "search": {
+    "placeholder": "Search messages...",
+    "filterButton": "Filter"
+  },
+  "filters": {
+    "allAreas": "All Areas"
+  },
+  "table": {
+    "message": "Message",
+    "area": "Area",
+    "sender": "Sender",
+    "date": "Date",
+    "actions": "Actions",
+    "unknown": "Unknown",
+    "noMessages": "No messages found"
+  },
+  "actions": {
+    "deleteSelected": "Delete ({{count}})",
+    "viewMessage": "View message",
+    "deleteMessage": "Delete message"
+  },
+  "details": {
+    "title": "Message Details",
+    "subject": "Subject",
+    "sender": "Sender",
+    "area": "Area",
+    "date": "Date",
+    "content": "Content"
+  },
+  "delete": {
+    "title": "Delete Message",
+    "message": "Are you sure you want to delete this message? This action cannot be undone.",
+    "button": "Delete"
+  },
+  "bulkDelete": {
+    "title": "Delete Selected Messages",
+    "message": "Are you sure you want to delete {{count}} messages? This action cannot be undone.",
+    "button": "Delete All"
+  },
+  "notifications": {
+    "deleted": "Message deleted successfully",
+    "bulkDeleted": "{{count}} messages deleted successfully",
+    "bulkDeletedPartial": "Failed to delete {{count}} messages",
+    "deleteFailed": "Failed to delete message"
+  }
+}

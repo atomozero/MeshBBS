@@ -1,0 +1,130 @@
+{
+  "app": {
+    "name": "MeshBBS Admin",
+    "tagline": "Pannello di Amministrazione"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "users": "Utenti",
+    "areas": "Aree",
+    "messages": "Messaggi",
+    "logs": "Log",
+    "settings": "Impostazioni",
+    "logout": "Esci"
+  },
+  "auth": {
+    "signIn": "Accedi",
+    "signOut": "Esci",
+    "username": "Nome utente",
+    "password": "Password",
+    "rememberMe": "Ricordami",
+    "forgotPassword": "Password dimenticata?",
+    "signInDescription": "Accedi per gestire il pannello di amministrazione",
+    "signingIn": "Accesso in corso...",
+    "invalidCredentials": "Nome utente o password non validi",
+    "sessionExpired": "Sessione scaduta. Effettua nuovamente l'accesso.",
+    "accountLocked": "Account bloccato. Riprova più tardi.",
+    "accountDisabled": "Account disabilitato."
+  },
+  "status": {
+    "connected": "Connesso",
+    "disconnected": "Disconnesso",
+    "connecting": "Connessione...",
+    "online": "Online",
+    "offline": "Offline",
+    "active": "Attivo",
+    "inactive": "Inattivo",
+    "loading": "Caricamento...",
+    "error": "Errore",
+    "success": "Successo"
+  },
+  "actions": {
+    "save": "Salva",
+    "cancel": "Annulla",
+    "delete": "Elimina",
+    "edit": "Modifica",
+    "create": "Crea",
+    "update": "Aggiorna",
+    "confirm": "Conferma",
+    "close": "Chiudi",
+    "search": "Cerca",
+    "filter": "Filtra",
+    "clear": "Pulisci",
+    "refresh": "Aggiorna",
+    "export": "Esporta",
+    "import": "Importa",
+    "back": "Indietro",
+    "next": "Avanti",
+    "previous": "Precedente",
+    "submit": "Invia",
+    "reset": "Reimposta",
+    "apply": "Applica",
+    "view": "Visualizza",
+    "download": "Scarica",
+    "upload": "Carica",
+    "copy": "Copia",
+    "tryAgain": "Riprova",
+    "reload": "Ricarica Pagina",
+    "goHome": "Vai alla Home"
+  },
+  "table": {
+    "noData": "Nessun dato disponibile",
+    "loading": "Caricamento dati...",
+    "rowsPerPage": "Righe per pagina",
+    "of": "di",
+    "page": "Pagina",
+    "showing": "Mostrando",
+    "to": "a",
+    "entries": "elementi"
+  },
+  "pagination": {
+    "first": "Prima",
+    "last": "Ultima",
+    "next": "Successiva",
+    "previous": "Precedente",
+    "page": "Pagina {{current}} di {{total}}"
+  },
+  "time": {
+    "now": "Adesso",
+    "minutesAgo": "{{count}} minuto fa",
+    "minutesAgo_plural": "{{count}} minuti fa",
+    "hoursAgo": "{{count}} ora fa",
+    "hoursAgo_plural": "{{count}} ore fa",
+    "daysAgo": "{{count}} giorno fa",
+    "daysAgo_plural": "{{count}} giorni fa",
+    "today": "Oggi",
+    "yesterday": "Ieri"
+  },
+  "errors": {
+    "generic": "Si è verificato un errore",
+    "notFound": "Non trovato",
+    "unauthorized": "Non autorizzato",
+    "forbidden": "Accesso negato",
+    "serverError": "Errore del server",
+    "networkError": "Errore di rete. Controlla la connessione.",
+    "validationError": "Errore di validazione",
+    "required": "Questo campo è obbligatorio",
+    "invalidEmail": "Indirizzo email non valido",
+    "minLength": "Minimo {{count}} caratteri",
+    "maxLength": "Massimo {{count}} caratteri",
+    "somethingWentWrong": "Qualcosa è andato storto",
+    "unexpectedError": "Si è verificato un errore imprevisto"
+  },
+  "confirm": {
+    "title": "Conferma Azione",
+    "areYouSure": "Sei sicuro?",
+    "cannotUndo": "Questa azione non può essere annullata.",
+    "yes": "Sì",
+    "no": "No"
+  },
+  "theme": {
+    "light": "Chiaro",
+    "dark": "Scuro",
+    "system": "Sistema"
+  },
+  "language": {
+    "select": "Seleziona lingua",
+    "en": "English",
+    "it": "Italiano"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "title": "Log Attività",
+  "subtitle": "Visualizza attività di sistema ed eventi",
+  "loading": "Caricamento log...",
+  "errorLoading": "Errore nel caricamento dei log",
+  "stats": {
+    "totalEntries": "Voci Totali",
+    "today": "Oggi",
+    "thisWeek": "Questa Settimana"
+  },
+  "search": {
+    "placeholder": "Cerca nei log...",
+    "filterButton": "Filtra"
+  },
+  "filters": {
+    "allEvents": "Tutti gli Eventi"
+  },
+  "table": {
+    "timestamp": "Data/Ora",
+    "event": "Evento",
+    "user": "Utente",
+    "details": "Dettagli",
+    "system": "Sistema",
+    "noLogs": "Nessun log trovato"
+  },
+  "actions": {
+    "export": "Esporta",
+    "clearOld": "Pulisci Vecchi"
+  },
+  "clearOld": {
+    "title": "Pulisci Log Vecchi",
+    "description": "Elimina le voci di log più vecchie del numero di giorni specificato.",
+    "daysToKeep": "Giorni da mantenere",
+    "hint": "I log più vecchi verranno eliminati",
+    "button": "Pulisci Log"
+  },
+  "export": {
+    "title": "Esporta Log",
+    "description": "Scegli un formato per esportare i log.",
+    "json": "Esporta come JSON",
+    "csv": "Esporta come CSV"
+  },
+  "notifications": {
+    "cleared": "Eliminate {{count}} voci di log vecchie",
+    "clearFailed": "Errore nella pulizia dei log",
+    "exported": "Log esportati come {{format}}",
+    "exportFailed": "Errore nell'esportazione dei log"
+  }
+}

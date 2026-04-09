@@ -1,0 +1,49 @@
+{
+  "title": "Activity Logs",
+  "subtitle": "View system activity and events",
+  "loading": "Loading logs...",
+  "errorLoading": "Error loading logs",
+  "stats": {
+    "totalEntries": "Total Entries",
+    "today": "Today",
+    "thisWeek": "This Week"
+  },
+  "search": {
+    "placeholder": "Search logs...",
+    "filterButton": "Filter"
+  },
+  "filters": {
+    "allEvents": "All Events"
+  },
+  "table": {
+    "timestamp": "Timestamp",
+    "event": "Event",
+    "user": "User",
+    "details": "Details",
+    "system": "System",
+    "noLogs": "No logs found"
+  },
+  "actions": {
+    "export": "Export",
+    "clearOld": "Clear Old"
+  },
+  "clearOld": {
+    "title": "Clear Old Logs",
+    "description": "Delete log entries older than the specified number of days.",
+    "daysToKeep": "Days to keep",
+    "hint": "Logs older than this will be deleted",
+    "button": "Clear Logs"
+  },
+  "export": {
+    "title": "Export Logs",
+    "description": "Choose a format to export the logs.",
+    "json": "Export as JSON",
+    "csv": "Export as CSV"
+  },
+  "notifications": {
+    "cleared": "Deleted {{count}} old log entries",
+    "clearFailed": "Failed to clear logs",
+    "exported": "Logs exported as {{format}}",
+    "exportFailed": "Failed to export logs"
+  }
+}

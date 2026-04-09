@@ -1,0 +1,43 @@
+[Unit]
+Description=MeshBBS Core Service
+Documentation=https://github.com/meshbbs/meshbbs
+After=network.target
+Wants=meshbbs-web.service
+
+[Service]
+Type=simple
+User=meshbbs
+Group=meshbbs
+WorkingDirectory=/opt/meshbbs
+EnvironmentFile=/var/lib/meshbbs/config.env
+ExecStart=/opt/meshbbs/venv/bin/python -m src.main
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=meshbbs
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/meshbbs /var/log/meshbbs
+PrivateTmp=true
+PrivateDevices=false
+DeviceAllow=/dev/ttyUSB0 rw
+DeviceAllow=/dev/ttyACM0 rw
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+MemoryDenyWriteExecute=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

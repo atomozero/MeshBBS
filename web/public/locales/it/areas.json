@@ -1,0 +1,67 @@
+{
+  "title": "Aree",
+  "subtitle": "Gestisci bacheche e aree di discussione",
+  "loading": "Caricamento aree...",
+  "errorLoading": "Errore nel caricamento delle aree",
+  "createArea": "Crea Area",
+  "table": {
+    "name": "Nome",
+    "description": "Descrizione",
+    "messages": "Messaggi",
+    "visibility": "Visibilità",
+    "status": "Stato",
+    "actions": "Azioni",
+    "noAreas": "Nessuna area trovata"
+  },
+  "visibility": {
+    "public": "Pubblica",
+    "hidden": "Nascosta"
+  },
+  "status": {
+    "readonly": "Sola lettura",
+    "open": "Aperta"
+  },
+  "actions": {
+    "viewDetails": "Visualizza Dettagli",
+    "edit": "Modifica",
+    "delete": "Elimina"
+  },
+  "create": {
+    "title": "Crea Nuova Area",
+    "areaName": "Nome Area",
+    "namePlaceholder": "es. generale, annunci",
+    "description": "Descrizione",
+    "descriptionPlaceholder": "Descrizione opzionale per questa area",
+    "public": "Pubblica",
+    "publicDescription": "Visibile a tutti gli utenti",
+    "readonly": "Sola lettura",
+    "readonlyDescription": "Gli utenti non possono pubblicare messaggi",
+    "button": "Crea Area"
+  },
+  "edit": {
+    "title": "Modifica Area: {{name}}",
+    "nameHint": "Il nome dell'area non può essere modificato",
+    "button": "Salva Modifiche"
+  },
+  "delete": {
+    "title": "Elimina Area",
+    "message": "Sei sicuro di voler eliminare \"{{name}}\"? Verranno eliminati anche tutti i messaggi in questa area. Questa azione non può essere annullata.",
+    "button": "Elimina"
+  },
+  "details": {
+    "title": "Dettagli Area",
+    "name": "Nome",
+    "messages": "Messaggi",
+    "visibility": "Visibilità",
+    "status": "Stato",
+    "description": "Descrizione"
+  },
+  "messages": {
+    "created": "Area \"{{name}}\" creata con successo",
+    "updated": "Area \"{{name}}\" aggiornata con successo",
+    "deleted": "Area \"{{name}}\" eliminata con successo",
+    "createFailed": "Errore nella creazione dell'area",
+    "updateFailed": "Errore nell'aggiornamento dell'area",
+    "deleteFailed": "Errore nell'eliminazione dell'area"
+  }
+}

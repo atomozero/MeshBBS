@@ -1,0 +1,90 @@
+{
+  "title": "Settings",
+  "subtitle": "Configure your BBS system",
+  "loading": "Loading settings...",
+  "errorLoading": "Error loading settings",
+  "saveChanges": "Save Changes",
+  "general": {
+    "title": "General Settings",
+    "bbsName": "BBS Name",
+    "bbsNamePlaceholder": "My MeshBBS",
+    "welcomeMessage": "Welcome Message",
+    "welcomeMessagePlaceholder": "Welcome to the BBS!",
+    "welcomeMessageHint": "Shown to users when they connect",
+    "defaultArea": "Default Area",
+    "defaultAreaPlaceholder": "general"
+  },
+  "messages": {
+    "title": "Message Settings",
+    "maxLength": "Max Message Length",
+    "retentionDays": "Retention Days",
+    "retentionHint": "Messages older than this will be cleaned up"
+  },
+  "access": {
+    "title": "Access Settings",
+    "sessionTimeout": "Session Timeout (minutes)",
+    "allowRegistration": "Allow Registration",
+    "allowRegistrationDesc": "Allow new users to register",
+    "requireApproval": "Require Approval",
+    "requireApprovalDesc": "New users must be approved by admin",
+    "enableLogging": "Enable Logging",
+    "enableLoggingDesc": "Log all user activity"
+  },
+  "systemInfo": {
+    "title": "System Info",
+    "version": "Version",
+    "uptime": "Uptime",
+    "databaseSize": "Database Size",
+    "diskUsage": "Disk Usage"
+  },
+  "retention": {
+    "title": "Retention Stats",
+    "messagesToClean": "Messages to clean",
+    "logsToClean": "Logs to clean",
+    "lastCleanup": "Last cleanup",
+    "runCleanup": "Run Cleanup"
+  },
+  "backups": {
+    "title": "Backups",
+    "create": "Create",
+    "noBackups": "No backups available",
+    "download": "Download",
+    "restore": "Restore",
+    "delete": "Delete"
+  },
+  "modals": {
+    "cleanup": {
+      "title": "Run Cleanup",
+      "message": "This will delete old messages and logs based on retention settings. Continue?",
+      "button": "Run Cleanup"
+    },
+    "createBackup": {
+      "title": "Create Backup",
+      "message": "This will create a backup of the current database. Continue?",
+      "button": "Create Backup"
+    },
+    "restoreBackup": {
+      "title": "Restore Backup",
+      "message": "Are you sure you want to restore from \"{{filename}}\"? This will replace all current data.",
+      "button": "Restore"
+    },
+    "deleteBackup": {
+      "title": "Delete Backup",
+      "message": "Are you sure you want to delete \"{{filename}}\"? This cannot be undone.",
+      "button": "Delete"
+    }
+  },
+  "notifications": {
+    "saved": "Settings saved successfully",
+    "saveFailed": "Failed to save settings",
+    "cleanupComplete": "Cleanup completed. Deleted {{count}} items.",
+    "cleanupFailed": "Cleanup failed",
+    "backupCreated": "Backup created: {{filename}}",
+    "backupFailed": "Backup failed",
+    "backupRestored": "Backup restored successfully. Reloading...",
+    "restoreFailed": "Restore failed",
+    "backupDeleted": "Backup deleted",
+    "deleteFailed": "Delete failed",
+    "downloadFailed": "Download failed"
+  }
+}

@@ -1,0 +1,117 @@
+# MeshBBS .gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Logs
+logs/
+*.log
+
+# Database
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Backups
+backups/
+*.bak
+*.backup
+
+# Config files with secrets
+config.env
+.env
+*.pem
+*.key
+
+# Node.js (web interface)
+web/node_modules/
+web/dist/
+web/.cache/
+web/coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Temp files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Build artifacts
+*.pyc
+*.pyo
+*.pyd
+
+# Documentation build
+docs/_build/
+site/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local development
+local/
+scratch/
+notes.md
+TODO.md

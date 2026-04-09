@@ -1,0 +1,79 @@
+{
+  "title": "Users",
+  "subtitle": "Manage BBS users and permissions",
+  "loading": "Loading users...",
+  "errorLoading": "Error loading users",
+  "search": {
+    "placeholder": "Search by name or ID...",
+    "filterButton": "Filter"
+  },
+  "filters": {
+    "allRoles": "All Roles",
+    "admin": "Admin",
+    "moderator": "Moderator",
+    "user": "User",
+    "allStatus": "All Status",
+    "active": "Active",
+    "banned": "Banned",
+    "muted": "Muted",
+    "kicked": "Kicked"
+  },
+  "table": {
+    "user": "User",
+    "role": "Role",
+    "status": "Status",
+    "messages": "Messages",
+    "lastSeen": "Last Seen",
+    "actions": "Actions",
+    "unknown": "Unknown",
+    "noUsers": "No users found"
+  },
+  "actions": {
+    "viewDetails": "View Details",
+    "ban": "Ban",
+    "unban": "Unban",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "kick": "Kick",
+    "unkick": "Unkick",
+    "promoteToMod": "Promote to Mod",
+    "demote": "Demote"
+  },
+  "moderation": {
+    "banUser": "Ban User",
+    "unbanUser": "Unban User",
+    "muteUser": "Mute User",
+    "unmuteUser": "Unmute User",
+    "kickUser": "Kick User",
+    "unkickUser": "Unkick User",
+    "promoteUser": "Promote User",
+    "demoteUser": "Demote User",
+    "banDescription": "This user will be banned from the BBS.",
+    "muteDescription": "This user will not be able to send messages.",
+    "kickDescription": "This user will be temporarily removed.",
+    "reason": "Reason",
+    "reasonPlaceholder": "Enter a reason...",
+    "duration": "Duration (hours)",
+    "confirmAction": "Are you sure you want to {{action}} {{user}}?"
+  },
+  "messages": {
+    "banned": "User {{name}} has been banned",
+    "unbanned": "User {{name}} has been unbanned",
+    "muted": "User {{name}} has been muted",
+    "unmuted": "User {{name}} has been unmuted",
+    "kicked": "User {{name}} has been kicked",
+    "unkicked": "User {{name}} has been unkicked",
+    "promoted": "User {{name}} has been promoted to moderator",
+    "demoted": "User {{name}} has been demoted",
+    "actionFailed": "Moderation action failed"
+  },
+  "details": {
+    "title": "User Details",
+    "role": "Role",
+    "status": "Status",
+    "messages": "Messages",
+    "lastSeen": "Last Seen",
+    "firstSeen": "First Seen",
+    "longName": "Long Name"
+  }
+}

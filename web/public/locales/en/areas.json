@@ -1,0 +1,67 @@
+{
+  "title": "Areas",
+  "subtitle": "Manage message boards and discussion areas",
+  "loading": "Loading areas...",
+  "errorLoading": "Error loading areas",
+  "createArea": "Create Area",
+  "table": {
+    "name": "Name",
+    "description": "Description",
+    "messages": "Messages",
+    "visibility": "Visibility",
+    "status": "Status",
+    "actions": "Actions",
+    "noAreas": "No areas found"
+  },
+  "visibility": {
+    "public": "Public",
+    "hidden": "Hidden"
+  },
+  "status": {
+    "readonly": "Read-only",
+    "open": "Open"
+  },
+  "actions": {
+    "viewDetails": "View Details",
+    "edit": "Edit",
+    "delete": "Delete"
+  },
+  "create": {
+    "title": "Create New Area",
+    "areaName": "Area Name",
+    "namePlaceholder": "e.g., general, announcements",
+    "description": "Description",
+    "descriptionPlaceholder": "Optional description for this area",
+    "public": "Public",
+    "publicDescription": "Visible to all users",
+    "readonly": "Read-only",
+    "readonlyDescription": "Users cannot post messages",
+    "button": "Create Area"
+  },
+  "edit": {
+    "title": "Edit Area: {{name}}",
+    "nameHint": "Area name cannot be changed",
+    "button": "Save Changes"
+  },
+  "delete": {
+    "title": "Delete Area",
+    "message": "Are you sure you want to delete \"{{name}}\"? This will also delete all messages in this area. This action cannot be undone.",
+    "button": "Delete"
+  },
+  "details": {
+    "title": "Area Details",
+    "name": "Name",
+    "messages": "Messages",
+    "visibility": "Visibility",
+    "status": "Status",
+    "description": "Description"
+  },
+  "messages": {
+    "created": "Area \"{{name}}\" created successfully",
+    "updated": "Area \"{{name}}\" updated successfully",
+    "deleted": "Area \"{{name}}\" deleted successfully",
+    "createFailed": "Failed to create area",
+    "updateFailed": "Failed to update area",
+    "deleteFailed": "Failed to delete area"
+  }
+}

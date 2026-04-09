@@ -1,0 +1,130 @@
+{
+  "app": {
+    "name": "MeshBBS Admin",
+    "tagline": "Administration Panel"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "users": "Users",
+    "areas": "Areas",
+    "messages": "Messages",
+    "logs": "Logs",
+    "settings": "Settings",
+    "logout": "Logout"
+  },
+  "auth": {
+    "signIn": "Sign In",
+    "signOut": "Sign Out",
+    "username": "Username",
+    "password": "Password",
+    "rememberMe": "Remember me",
+    "forgotPassword": "Forgot password?",
+    "signInDescription": "Sign in to access the admin panel",
+    "signingIn": "Signing in...",
+    "invalidCredentials": "Invalid username or password",
+    "sessionExpired": "Session expired. Please sign in again.",
+    "accountLocked": "Account locked. Try again later.",
+    "accountDisabled": "Account disabled."
+  },
+  "status": {
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "connecting": "Connecting...",
+    "online": "Online",
+    "offline": "Offline",
+    "active": "Active",
+    "inactive": "Inactive",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success"
+  },
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "update": "Update",
+    "confirm": "Confirm",
+    "close": "Close",
+    "search": "Search",
+    "filter": "Filter",
+    "clear": "Clear",
+    "refresh": "Refresh",
+    "export": "Export",
+    "import": "Import",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "submit": "Submit",
+    "reset": "Reset",
+    "apply": "Apply",
+    "view": "View",
+    "download": "Download",
+    "upload": "Upload",
+    "copy": "Copy",
+    "tryAgain": "Try Again",
+    "reload": "Reload Page",
+    "goHome": "Go Home"
+  },
+  "table": {
+    "noData": "No data available",
+    "loading": "Loading data...",
+    "rowsPerPage": "Rows per page",
+    "of": "of",
+    "page": "Page",
+    "showing": "Showing",
+    "to": "to",
+    "entries": "entries"
+  },
+  "pagination": {
+    "first": "First",
+    "last": "Last",
+    "next": "Next",
+    "previous": "Previous",
+    "page": "Page {{current}} of {{total}}"
+  },
+  "time": {
+    "now": "Just now",
+    "minutesAgo": "{{count}} minute ago",
+    "minutesAgo_plural": "{{count}} minutes ago",
+    "hoursAgo": "{{count}} hour ago",
+    "hoursAgo_plural": "{{count}} hours ago",
+    "daysAgo": "{{count}} day ago",
+    "daysAgo_plural": "{{count}} days ago",
+    "today": "Today",
+    "yesterday": "Yesterday"
+  },
+  "errors": {
+    "generic": "An error occurred",
+    "notFound": "Not found",
+    "unauthorized": "Unauthorized",
+    "forbidden": "Access denied",
+    "serverError": "Server error",
+    "networkError": "Network error. Check your connection.",
+    "validationError": "Validation error",
+    "required": "This field is required",
+    "invalidEmail": "Invalid email address",
+    "minLength": "Minimum {{count}} characters",
+    "maxLength": "Maximum {{count}} characters",
+    "somethingWentWrong": "Something went wrong",
+    "unexpectedError": "An unexpected error occurred"
+  },
+  "confirm": {
+    "title": "Confirm Action",
+    "areYouSure": "Are you sure?",
+    "cannotUndo": "This action cannot be undone.",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "language": {
+    "select": "Select language",
+    "en": "English",
+    "it": "Italiano"
+  }
+}

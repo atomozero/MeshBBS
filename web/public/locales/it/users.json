@@ -1,0 +1,79 @@
+{
+  "title": "Utenti",
+  "subtitle": "Gestisci utenti e permessi del BBS",
+  "loading": "Caricamento utenti...",
+  "errorLoading": "Errore nel caricamento degli utenti",
+  "search": {
+    "placeholder": "Cerca per nome o ID...",
+    "filterButton": "Filtra"
+  },
+  "filters": {
+    "allRoles": "Tutti i Ruoli",
+    "admin": "Admin",
+    "moderator": "Moderatore",
+    "user": "Utente",
+    "allStatus": "Tutti gli Stati",
+    "active": "Attivo",
+    "banned": "Bannato",
+    "muted": "Silenziato",
+    "kicked": "Espulso"
+  },
+  "table": {
+    "user": "Utente",
+    "role": "Ruolo",
+    "status": "Stato",
+    "messages": "Messaggi",
+    "lastSeen": "Ultima Visita",
+    "actions": "Azioni",
+    "unknown": "Sconosciuto",
+    "noUsers": "Nessun utente trovato"
+  },
+  "actions": {
+    "viewDetails": "Visualizza Dettagli",
+    "ban": "Banna",
+    "unban": "Rimuovi Ban",
+    "mute": "Silenzia",
+    "unmute": "Rimuovi Silenzio",
+    "kick": "Espelli",
+    "unkick": "Rimuovi Espulsione",
+    "promoteToMod": "Promuovi a Mod",
+    "demote": "Retrocedi"
+  },
+  "moderation": {
+    "banUser": "Banna Utente",
+    "unbanUser": "Rimuovi Ban Utente",
+    "muteUser": "Silenzia Utente",
+    "unmuteUser": "Rimuovi Silenzio Utente",
+    "kickUser": "Espelli Utente",
+    "unkickUser": "Rimuovi Espulsione Utente",
+    "promoteUser": "Promuovi Utente",
+    "demoteUser": "Retrocedi Utente",
+    "banDescription": "Questo utente sarà bannato dal BBS.",
+    "muteDescription": "Questo utente non potrà inviare messaggi.",
+    "kickDescription": "Questo utente sarà temporaneamente rimosso.",
+    "reason": "Motivo",
+    "reasonPlaceholder": "Inserisci un motivo...",
+    "duration": "Durata (ore)",
+    "confirmAction": "Sei sicuro di voler {{action}} {{user}}?"
+  },
+  "messages": {
+    "banned": "L'utente {{name}} è stato bannato",
+    "unbanned": "Il ban dell'utente {{name}} è stato rimosso",
+    "muted": "L'utente {{name}} è stato silenziato",
+    "unmuted": "Il silenzio dell'utente {{name}} è stato rimosso",
+    "kicked": "L'utente {{name}} è stato espulso",
+    "unkicked": "L'espulsione dell'utente {{name}} è stata rimossa",
+    "promoted": "L'utente {{name}} è stato promosso a moderatore",
+    "demoted": "L'utente {{name}} è stato retrocesso",
+    "actionFailed": "Azione di moderazione fallita"
+  },
+  "details": {
+    "title": "Dettagli Utente",
+    "role": "Ruolo",
+    "status": "Stato",
+    "messages": "Messaggi",
+    "lastSeen": "Ultima Visita",
+    "firstSeen": "Prima Visita",
+    "longName": "Nome Completo"
+  }
+}

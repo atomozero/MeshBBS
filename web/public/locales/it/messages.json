@@ -1,0 +1,51 @@
+{
+  "title": "Messaggi",
+  "subtitle": "Visualizza e gestisci i messaggi del BBS",
+  "loading": "Caricamento messaggi...",
+  "errorLoading": "Errore nel caricamento dei messaggi",
+  "search": {
+    "placeholder": "Cerca messaggi...",
+    "filterButton": "Filtra"
+  },
+  "filters": {
+    "allAreas": "Tutte le Aree"
+  },
+  "table": {
+    "message": "Messaggio",
+    "area": "Area",
+    "sender": "Mittente",
+    "date": "Data",
+    "actions": "Azioni",
+    "unknown": "Sconosciuto",
+    "noMessages": "Nessun messaggio trovato"
+  },
+  "actions": {
+    "deleteSelected": "Elimina ({{count}})",
+    "viewMessage": "Visualizza messaggio",
+    "deleteMessage": "Elimina messaggio"
+  },
+  "details": {
+    "title": "Dettagli Messaggio",
+    "subject": "Oggetto",
+    "sender": "Mittente",
+    "area": "Area",
+    "date": "Data",
+    "content": "Contenuto"
+  },
+  "delete": {
+    "title": "Elimina Messaggio",
+    "message": "Sei sicuro di voler eliminare questo messaggio? Questa azione non può essere annullata.",
+    "button": "Elimina"
+  },
+  "bulkDelete": {
+    "title": "Elimina Messaggi Selezionati",
+    "message": "Sei sicuro di voler eliminare {{count}} messaggi? Questa azione non può essere annullata.",
+    "button": "Elimina Tutti"
+  },
+  "notifications": {
+    "deleted": "Messaggio eliminato con successo",
+    "bulkDeleted": "{{count}} messaggi eliminati con successo",
+    "bulkDeletedPartial": "Errore nell'eliminazione di {{count}} messaggi",
+    "deleteFailed": "Errore nell'eliminazione del messaggio"
+  }
+}

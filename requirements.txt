@@ -1,0 +1,32 @@
+# MeshCore BBS Dependencies
+
+# Database
+SQLAlchemy>=2.0.0
+
+# MeshCore radio communication
+meshcore>=0.1.0
+pyserial-asyncio>=0.6
+
+# MQTT integration (optional)
+paho-mqtt>=2.0.0
+
+# Web Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.6
+
+# Authentication
+pyjwt>=2.8.0
+argon2-cffi>=23.1.0
+bcrypt>=4.1.0
+
+# Testing
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
+httpx>=0.26.0
+
+# Development
+black>=23.0.0
+isort>=5.12.0
+mypy>=1.0.0

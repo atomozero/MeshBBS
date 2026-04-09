@@ -1,0 +1,41 @@
+[Unit]
+Description=MeshBBS Web API Service
+Documentation=https://github.com/meshbbs/meshbbs
+After=network.target meshbbs.service
+BindsTo=meshbbs.service
+
+[Service]
+Type=simple
+User=meshbbs
+Group=meshbbs
+WorkingDirectory=/opt/meshbbs
+EnvironmentFile=/var/lib/meshbbs/config.env
+ExecStart=/opt/meshbbs/venv/bin/uvicorn src.web.main:app --host ${WEB_HOST:-0.0.0.0} --port ${WEB_PORT:-8080}
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=meshbbs-web
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/meshbbs /var/log/meshbbs
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+MemoryDenyWriteExecute=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

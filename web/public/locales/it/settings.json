@@ -1,0 +1,90 @@
+{
+  "title": "Impostazioni",
+  "subtitle": "Configura il tuo sistema BBS",
+  "loading": "Caricamento impostazioni...",
+  "errorLoading": "Errore nel caricamento delle impostazioni",
+  "saveChanges": "Salva Modifiche",
+  "general": {
+    "title": "Impostazioni Generali",
+    "bbsName": "Nome BBS",
+    "bbsNamePlaceholder": "Il Mio MeshBBS",
+    "welcomeMessage": "Messaggio di Benvenuto",
+    "welcomeMessagePlaceholder": "Benvenuto nel BBS!",
+    "welcomeMessageHint": "Mostrato agli utenti quando si connettono",
+    "defaultArea": "Area Predefinita",
+    "defaultAreaPlaceholder": "generale"
+  },
+  "messages": {
+    "title": "Impostazioni Messaggi",
+    "maxLength": "Lunghezza Massima Messaggio",
+    "retentionDays": "Giorni di Conservazione",
+    "retentionHint": "I messaggi più vecchi verranno puliti"
+  },
+  "access": {
+    "title": "Impostazioni Accesso",
+    "sessionTimeout": "Timeout Sessione (minuti)",
+    "allowRegistration": "Permetti Registrazione",
+    "allowRegistrationDesc": "Permetti ai nuovi utenti di registrarsi",
+    "requireApproval": "Richiedi Approvazione",
+    "requireApprovalDesc": "I nuovi utenti devono essere approvati dall'admin",
+    "enableLogging": "Abilita Logging",
+    "enableLoggingDesc": "Registra tutte le attività degli utenti"
+  },
+  "systemInfo": {
+    "title": "Info Sistema",
+    "version": "Versione",
+    "uptime": "Uptime",
+    "databaseSize": "Dimensione Database",
+    "diskUsage": "Uso Disco"
+  },
+  "retention": {
+    "title": "Statistiche Conservazione",
+    "messagesToClean": "Messaggi da pulire",
+    "logsToClean": "Log da pulire",
+    "lastCleanup": "Ultima pulizia",
+    "runCleanup": "Esegui Pulizia"
+  },
+  "backups": {
+    "title": "Backup",
+    "create": "Crea",
+    "noBackups": "Nessun backup disponibile",
+    "download": "Scarica",
+    "restore": "Ripristina",
+    "delete": "Elimina"
+  },
+  "modals": {
+    "cleanup": {
+      "title": "Esegui Pulizia",
+      "message": "Verranno eliminati messaggi e log vecchi in base alle impostazioni di conservazione. Continuare?",
+      "button": "Esegui Pulizia"
+    },
+    "createBackup": {
+      "title": "Crea Backup",
+      "message": "Verrà creato un backup del database corrente. Continuare?",
+      "button": "Crea Backup"
+    },
+    "restoreBackup": {
+      "title": "Ripristina Backup",
+      "message": "Sei sicuro di voler ripristinare da \"{{filename}}\"? Tutti i dati correnti verranno sostituiti.",
+      "button": "Ripristina"
+    },
+    "deleteBackup": {
+      "title": "Elimina Backup",
+      "message": "Sei sicuro di voler eliminare \"{{filename}}\"? Questa azione non può essere annullata.",
+      "button": "Elimina"
+    }
+  },
+  "notifications": {
+    "saved": "Impostazioni salvate con successo",
+    "saveFailed": "Errore nel salvataggio delle impostazioni",
+    "cleanupComplete": "Pulizia completata. Eliminati {{count}} elementi.",
+    "cleanupFailed": "Pulizia fallita",
+    "backupCreated": "Backup creato: {{filename}}",
+    "backupFailed": "Creazione backup fallita",
+    "backupRestored": "Backup ripristinato con successo. Ricaricamento...",
+    "restoreFailed": "Ripristino fallito",
+    "backupDeleted": "Backup eliminato",
+    "deleteFailed": "Eliminazione fallita",
+    "downloadFailed": "Download fallito"
+  }
+}
