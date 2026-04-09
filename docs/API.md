@@ -570,9 +570,15 @@ Le modifiche vengono persistite nel file `data/settings.json`.
 - `bbs_name` (string, 1-50 char)
 - `default_area` (string, 2-32 char)
 - `max_message_length` (int, 50-1000)
+- `latitude` (float, -90/+90) - Latitudine BBS
+- `longitude` (float, -180/+180) - Longitudine BBS
 - `pm_retention_days` (int, 0-365, 0=infinito)
 - `log_retention_days` (int, 0-365, 0=infinito)
 - `allow_ephemeral_pm` (bool)
+- `send_delay` (float) - Secondi tra chunk di risposta
+- `max_send_attempts` (int) - Tentativi massimi invio
+- `send_retry_delay` (float) - Secondi base tra retry
+- `stats_publish_interval` (int) - Secondi tra pubblicazioni stats MQTT
 
 **Nota:** Alcune impostazioni richiedono un riavvio per avere effetto.
 
@@ -839,6 +845,90 @@ Ritenta la consegna di un messaggio fallito (admin).
   "state": "pending",
   "retry_count": 2,
   "message": "Delivery queued for retry"
+}
+```
+
+---
+
+### Statistics
+
+#### GET /stats
+
+Statistiche unificate di utilizzo del BBS. Stesso payload pubblicato via MQTT su `meshbbs/stats`.
+
+**Risposta:**
+```json
+{
+  "users": {
+    "total": 150,
+    "active_24h": 23,
+    "active_7d": 89,
+    "new_today": 3,
+    "banned": 5,
+    "muted": 2
+  },
+  "messages": {
+    "public": {
+      "total": 5420,
+      "today": 45,
+      "last_hour": 8,
+      "week": 320
+    },
+    "private": {
+      "total": 890,
+      "today": 12,
+      "unread": 34
+    },
+    "areas": 8
+  },
+  "radio": {
+    "status": "connected",
+    "connected": true,
+    "messages_processed": 1234,
+    "reconnect_attempts": 0,
+    "name": "MeshBBS Node",
+    "port": "/dev/ttyUSB0",
+    "battery_level": 85,
+    "battery_charging": false,
+    "uptime_seconds": 86400,
+    "last_activity": "2026-01-18T10:30:00Z"
+  },
+  "delivery": {
+    "by_state": {
+      "pending": 5,
+      "sending": 2,
+      "sent": 10,
+      "delivered": 1234,
+      "read": 890,
+      "failed": 23
+    },
+    "total": 2164,
+    "success_rate": 98.2,
+    "failed": 23
+  },
+  "system": {
+    "bbs_name": "MeshBBS Italia",
+    "uptime_seconds": 86400,
+    "db_size_bytes": 2621440,
+    "memory": {
+      "available": 1073741824,
+      "total": 4294967296
+    }
+  },
+  "collected_at": "2026-01-18T10:30:00Z"
+}
+```
+
+#### GET /stats/health
+
+Health check leggero (senza autenticazione, senza query al database).
+
+**Risposta:**
+```json
+{
+  "status": "ok",
+  "radio_connected": true,
+  "messages_processed": 1234
 }
 ```
 

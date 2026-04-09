@@ -34,12 +34,18 @@ Le impostazioni modificate via Web Admin vengono salvate in `data/settings.json`
 | `bbs_name` | string | Nome visualizzato del BBS |
 | `default_area` | string | Area messaggi predefinita |
 | `max_message_length` | int | Lunghezza massima messaggio |
+| `latitude` | float | Latitudine BBS (-90/+90) |
+| `longitude` | float | Longitudine BBS (-180/+180) |
 | `pm_retention_days` | int | Giorni retention PM (0=infinito) |
 | `activity_log_retention_days` | int | Giorni retention log |
 | `allow_ephemeral_pm` | bool | Abilita messaggi effimeri |
 | `min_message_interval` | float | Secondi minimi tra messaggi |
 | `max_messages_per_minute` | int | Messaggi max al minuto |
 | `advert_interval_minutes` | int | Minuti tra advertisement |
+| `send_delay` | float | Secondi tra chunk di risposta (default: 3.0) |
+| `max_send_attempts` | int | Tentativi massimi invio (default: 2) |
+| `send_retry_delay` | float | Secondi base tra retry invio (default: 2.0) |
+| `stats_publish_interval` | int | Secondi tra pubblicazioni stats MQTT (default: 300) |
 
 ---
 
@@ -58,6 +64,17 @@ MeshBBS si configura principalmente tramite variabili d'ambiente. In produzione,
 | `BBS_DEFAULT_AREA` | `generale` | Area messaggi predefinita |
 | `BBS_RESPONSE_PREFIX` | `[BBS]` | Prefisso risposte |
 | `BBS_ADVERT_INTERVAL` | `15` | Minuti tra advertisement |
+| `BBS_LATITUDE` | (vuoto) | Latitudine BBS (es. 45.4642) |
+| `BBS_LONGITUDE` | (vuoto) | Longitudine BBS (es. 9.1900) |
+
+### Throttling Invio
+
+| Variabile | Default | Descrizione |
+|-----------|---------|-------------|
+| `SEND_DELAY` | `3.0` | Secondi di pausa tra chunk di risposta multi-riga |
+| `MAX_SEND_ATTEMPTS` | `2` | Tentativi massimi di invio messaggio |
+| `SEND_RETRY_DELAY` | `2.0` | Secondi base tra retry (backoff lineare) |
+| `STATS_PUBLISH_INTERVAL` | `300` | Secondi tra pubblicazioni stats MQTT |
 
 ### Connessione Radio
 
@@ -170,6 +187,10 @@ BBS_NAME=MeshBBS Italia
 BBS_WELCOME="Benvenuto su MeshBBS Italia!"
 BBS_DEFAULT_AREA=generale
 
+# === Location (opzionale) ===
+# BBS_LATITUDE=45.4642
+# BBS_LONGITUDE=9.1900
+
 # === Radio Connection ===
 SERIAL_PORT=/dev/ttyUSB0
 BAUD_RATE=115200
@@ -244,16 +265,42 @@ mqtt:
   sensor:
     - name: "MeshBBS Users"
       state_topic: "meshbbs/stats"
-      value_template: "{{ value_json.total_users }}"
+      value_template: "{{ value_json.users.total }}"
+
+    - name: "MeshBBS Active Users 24h"
+      state_topic: "meshbbs/stats"
+      value_template: "{{ value_json.users.active_24h }}"
 
     - name: "MeshBBS Messages Today"
       state_topic: "meshbbs/stats"
-      value_template: "{{ value_json.messages_today }}"
+      value_template: "{{ value_json.messages.public.today }}"
+
+    - name: "MeshBBS Messages Last Hour"
+      state_topic: "meshbbs/stats"
+      value_template: "{{ value_json.messages.public.last_hour }}"
+
+    - name: "MeshBBS Delivery Success Rate"
+      state_topic: "meshbbs/stats"
+      value_template: "{{ value_json.delivery.success_rate }}"
+      unit_of_measurement: "%"
+
+    - name: "MeshBBS Radio Connected"
+      state_topic: "meshbbs/stats"
+      value_template: "{{ value_json.radio.connected }}"
+
+    - name: "MeshBBS Radio Battery"
+      state_topic: "meshbbs/stats"
+      value_template: "{{ value_json.radio.battery_level }}"
+      unit_of_measurement: "%"
 
     - name: "MeshBBS Status"
       state_topic: "meshbbs/status"
       value_template: "{{ value_json.status }}"
 ```
+
+Le statistiche vengono pubblicate ogni `STATS_PUBLISH_INTERVAL` secondi (default: 300 = 5 minuti) sul topic `meshbbs/stats` con flag `retain`.
+
+Il payload completo e disponibile anche via REST API: `GET /api/v1/stats`.
 
 ### Reverse Proxy con Nginx
 
