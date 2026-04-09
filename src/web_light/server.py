@@ -189,6 +189,7 @@ def page(title, content, active=""):
     {nav_link('/', 'Dashboard', 'dashboard')}
     {nav_link('/messages', 'Messaggi', 'messages')}
     {nav_link('/users', 'Utenti', 'users')}
+    {nav_link('/network', 'Rete', 'network')}
     {nav_link('/logs', 'Log', 'logs')}
     {nav_link('/logout', 'Esci', '')}
   </div>
@@ -206,6 +207,7 @@ def page(title, content, active=""):
   var path = location.pathname === '/' ? '/api/partial/dashboard' :
              location.pathname === '/messages' ? '/api/partial/messages' :
              location.pathname === '/users' ? '/api/partial/users' :
+             location.pathname === '/network' ? '/api/partial/network' :
              location.pathname === '/logs' ? '/api/partial/logs' : null;
   if (!path) return;
 
@@ -642,6 +644,80 @@ def _render_user_rows(users):
 
 
 # ---------------------------------------------------------------
+# Routes: Network
+# ---------------------------------------------------------------
+
+@app.route("/network")
+@require_auth
+def network_page():
+    nodes = _get_mesh_nodes()
+    rows = _render_network_rows(nodes)
+
+    return page("Rete", f"""
+        <h1 style="margin:1rem 0">Rete Mesh
+            <span id="live-indicator" class="badge badge-green" style="font-size:0.6rem;vertical-align:middle;opacity:0.5">LIVE</span>
+        </h1>
+        <div class="grid">
+            <div class="card">
+                <h3>Nodi totali</h3>
+                <div class="value">{len(nodes)}</div>
+            </div>
+            <div class="card">
+                <h3>Ripetitori</h3>
+                <div class="value">{sum(1 for n in nodes if n['type'] == 'RPT')}</div>
+            </div>
+            <div class="card">
+                <h3>Client</h3>
+                <div class="value">{sum(1 for n in nodes if n['type'] == 'CLI')}</div>
+            </div>
+            <div class="card">
+                <h3>BBS/Room</h3>
+                <div class="value">{sum(1 for n in nodes if n['type'] == 'ROOM')}</div>
+            </div>
+        </div>
+        <div class="card"><div id="live-content">
+        <table>
+        <tr><th>Nome</th><th>Tipo</th><th>Chiave</th><th>Percorso</th></tr>
+        {rows if rows else '<tr><td colspan="4" style="text-align:center;color:#64748b">Nessun nodo visibile</td></tr>'}
+        </table>
+        </div></div>
+    """, active="network")
+
+
+def _render_network_rows(nodes):
+    """Render network table rows."""
+    rows = ""
+    type_badges = {
+        "RPT": '<span class="badge badge-yellow">RPT</span>',
+        "CLI": '<span class="badge" style="background:#1e3a5f;color:#60a5fa">CLI</span>',
+        "ROOM": '<span class="badge badge-green">ROOM</span>',
+        "SENS": '<span class="badge" style="background:#4a1d7f;color:#c084fc">SENS</span>',
+    }
+    for n in nodes:
+        badge = type_badges.get(n["type"], '<span class="badge">?</span>')
+        path = n.get("path", "")
+        rows += f"""<tr>
+            <td><strong>{n['name']}</strong></td>
+            <td>{badge}</td>
+            <td><code>{n['key'][:12]}...</code></td>
+            <td>{path}</td>
+        </tr>"""
+    return rows
+
+
+@app.route("/api/partial/network")
+@require_auth
+def partial_network():
+    """Return network table HTML fragment."""
+    nodes = _get_mesh_nodes()
+    rows = _render_network_rows(nodes)
+    return f"""<table>
+    <tr><th>Nome</th><th>Tipo</th><th>Chiave</th><th>Percorso</th></tr>
+    {rows if rows else '<tr><td colspan="4" style="text-align:center;color:#64748b">Nessun nodo visibile</td></tr>'}
+    </table>"""
+
+
+# ---------------------------------------------------------------
 # Routes: Logs
 # ---------------------------------------------------------------
 
@@ -800,6 +876,48 @@ def _get_stats():
     except Exception as e:
         logger.error(f"Error collecting stats: {e}")
         return {"users": {"total": 0, "active_24h": 0}, "messages": {"public": {"total": 0, "today": 0}, "private": {"total": 0, "today": 0, "unread": 0}}}
+
+
+def _get_mesh_nodes():
+    """Get mesh network nodes from companion radio."""
+    NODE_TYPES = {0: "---", 1: "CLI", 2: "RPT", 3: "ROOM", 4: "SENS"}
+    try:
+        from bbs.runtime import get_bbs_instance
+
+        bbs = get_bbs_instance()
+        if bbs is None or not bbs._running:
+            return []
+
+        mc = bbs.connection._meshcore
+        if mc is None:
+            return []
+
+        contacts = mc.contacts or {}
+        nodes = []
+        for key, info in contacts.items():
+            node_type = NODE_TYPES.get(info.get("type", 0), "?")
+            name = info.get("name", key[:8] if isinstance(key, str) else "?")
+            adv_name = info.get("adv_name", "")
+            path = f"via {adv_name}" if adv_name else "diretto"
+            pub_key = info.get("pubkey", key)
+            if isinstance(pub_key, bytes):
+                pub_key = pub_key.hex()
+
+            nodes.append({
+                "name": name,
+                "type": node_type,
+                "key": str(pub_key),
+                "path": path,
+            })
+
+        # Sort: repeaters first, then by name
+        type_order = {"RPT": 0, "ROOM": 1, "CLI": 2, "SENS": 3}
+        nodes.sort(key=lambda n: (type_order.get(n["type"], 9), n["name"]))
+        return nodes
+
+    except Exception as e:
+        logger.error(f"Error fetching mesh nodes: {e}")
+        return []
 
 
 def _get_radio_status():
