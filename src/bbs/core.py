@@ -83,9 +83,13 @@ class BBSCore:
             log_activity(session, EventType.BBS_STARTED, details=self.config.bbs_name)
 
         # Connect to companion radio
-        logger.info(f"Connecting to companion radio on {self.config.serial_port}...")
+        if self.config.connection_mode == "tcp":
+            conn_info = f"TCP {self.config.tcp_host}:{self.config.tcp_port}"
+        else:
+            conn_info = f"Serial {self.config.serial_port}"
+        logger.info(f"Connecting to companion radio via {conn_info}...")
         await self.state_manager.set_connecting(
-            self.config.serial_port,
+            conn_info,
             self.config.baud_rate
         )
         connected = await self.connection.connect()
@@ -291,15 +295,21 @@ class BBSCore:
         """
         Periodically broadcast radio status and stats to WebSocket clients.
 
-        Runs every 30 seconds. Does nothing if no clients are connected.
+        Runs every 30 seconds. Does nothing if no clients are connected
+        or if the FastAPI WebSocket module is not available (light mode).
         """
         interval = 30
+
+        # Check if WebSocket manager is available (not in light mode)
+        try:
+            from web.websocket.manager import get_connection_manager
+        except ImportError:
+            logger.debug("WebSocket manager not available (light mode), skipping periodic status")
+            return
 
         while self._running:
             try:
                 await asyncio.sleep(interval)
-
-                from web.websocket.manager import get_connection_manager
 
                 manager = get_connection_manager()
                 if manager.connection_count == 0:
