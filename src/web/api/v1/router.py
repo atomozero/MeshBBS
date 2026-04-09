@@ -15,6 +15,7 @@ from web.api.v1.settings import router as settings_router
 from web.api.v1.backups import router as backups_router
 from web.api.v1.radio import router as radio_router
 from web.api.v1.stats import router as stats_router
+from web.api.v1.bbs import router as bbs_router
 
 
 # Create main v1 router
@@ -30,3 +31,4 @@ api_router.include_router(settings_router)
 api_router.include_router(backups_router)
 api_router.include_router(radio_router)
 api_router.include_router(stats_router)
+api_router.include_router(bbs_router)
