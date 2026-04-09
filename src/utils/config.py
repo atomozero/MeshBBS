@@ -98,7 +98,8 @@ class Config:
     allow_ephemeral_pm: bool = True  # Allow users to send non-saved PMs
 
     # Paths (computed)
-    base_path: Path = field(default_factory=lambda: Path(__file__).parent.parent.parent.parent)
+    # base_path: config.py -> utils/ -> src/ -> project root
+    base_path: Path = field(default_factory=lambda: Path(__file__).parent.parent.parent)
 
     # Config file path
     config_file_path: str = field(default="")
