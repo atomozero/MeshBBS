@@ -240,7 +240,7 @@ class BBSCore:
         Splits by newlines first, then by length if a single chunk
         exceeds the MTU. Adds delays between chunks.
         """
-        MAX_CHUNK = 160  # safe limit under LoRa MTU
+        MAX_CHUNK = 140  # safe limit under LoRa MTU
         delay = self.config.send_delay
 
         # Split into lines first
