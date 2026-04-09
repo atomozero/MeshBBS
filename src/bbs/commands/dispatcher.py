@@ -95,8 +95,16 @@ class CommandDispatcher:
         # Get or create user
         user, is_new = self.user_repo.get_or_create(sender_key)
 
+        welcome_msg = ""
         if is_new:
             logger.info(f"New user: {sender_key[:8]}...")
+            from utils.config import get_config
+            cfg = get_config()
+            welcome_msg = (
+                f"{self.response_prefix} Benvenuto su {cfg.bbs_name}! "
+                f"Usa !help per la lista comandi. "
+                f"Imposta il tuo nick con !nick <nome>\n"
+            )
 
         # Check if user is banned or kicked
         if not user.is_active():
@@ -160,10 +168,13 @@ class CommandDispatcher:
             else:
                 logger.debug(f"Command failed: {result.error or result.response}")
 
-            return result.response
+            resp = result.response
+            if welcome_msg:
+                resp = welcome_msg + resp
+            return resp
 
         except Exception as e:
-            logger.exception(f"Error executing /{parsed.command}: {e}")
+            logger.exception(f"Error executing !{parsed.command}: {e}")
             return self._format_response("Errore interno")
 
     def _format_response(self, message: str) -> str:
