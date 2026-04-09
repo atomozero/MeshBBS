@@ -775,23 +775,43 @@ def network_page():
 
 
 def _render_network_rows(nodes):
-    """Render network table rows."""
-    rows = ""
+    """Render network table rows grouped by type."""
     type_badges = {
         "RPT": '<span class="badge badge-yellow">RPT</span>',
         "CLI": '<span class="badge" style="background:#1e3a5f;color:#60a5fa">CLI</span>',
         "ROOM": '<span class="badge badge-green">ROOM</span>',
         "SENS": '<span class="badge" style="background:#4a1d7f;color:#c084fc">SENS</span>',
     }
+    type_labels = {"RPT": "Ripetitori", "ROOM": "BBS / Room", "CLI": "Client", "SENS": "Sensori"}
+    type_order = ["RPT", "ROOM", "CLI", "SENS", "---"]
+
+    # Group nodes by type
+    groups = {}
     for n in nodes:
-        badge = type_badges.get(n["type"], '<span class="badge">?</span>')
-        path = n.get("path", "")
-        rows += f"""<tr>
-            <td><strong>{n['name']}</strong></td>
-            <td>{badge}</td>
-            <td><code>{n['key'][:12]}...</code></td>
-            <td>{path}</td>
-        </tr>"""
+        t = n["type"]
+        if t not in groups:
+            groups[t] = []
+        groups[t].append(n)
+
+    rows = ""
+    for t in type_order:
+        if t not in groups:
+            continue
+        label = type_labels.get(t, t)
+        badge = type_badges.get(t, f'<span class="badge">{t}</span>')
+        rows += f'<tr><td colspan="4" style="padding-top:1rem"><strong>{badge} {label} ({len(groups[t])})</strong></td></tr>'
+        for n in groups[t]:
+            path = n.get("path", "")
+            gps = ""
+            if "lat" in n and "lon" in n:
+                gps = f' <span style="color:#64748b;font-size:0.7rem">GPS</span>'
+            rows += f"""<tr>
+                <td>{n['name']}{gps}</td>
+                <td>{badge}</td>
+                <td><code>{n['key'][:12]}...</code></td>
+                <td>{path}</td>
+            </tr>"""
+
     return rows
 
 
