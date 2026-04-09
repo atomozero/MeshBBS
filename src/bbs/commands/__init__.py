@@ -9,6 +9,7 @@ from . import (  # noqa: F401
     advert_cmd,
     help_cmd,
     list_cmd,
+    news_cmd,
     nodes_cmd,
     post_cmd,
     read_cmd,
