@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   Users,
   MessageSquare,
@@ -7,6 +7,9 @@ import {
   TrendingUp,
   Clock,
   Server,
+  Radio,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import {
   LineChart,
@@ -19,7 +22,8 @@ import {
 } from 'recharts';
 import { Card, CardHeader, CardContent, Badge, LoadingPage, Alert } from '@/components/ui';
 import { dashboardApi } from '@/api';
-import type { DashboardStats, ChartData, ActivityItem, TopPoster } from '@/types';
+import { useWebSocket } from '@/contexts';
+import type { DashboardStats, ChartData, ActivityItem, TopPoster, WebSocketMessage } from '@/types';
 
 interface StatCardProps {
   title: string;
@@ -72,6 +76,25 @@ export function DashboardPage() {
   const [chartPeriod, setChartPeriod] = useState<'7d' | '30d' | '90d'>('7d');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [realtimeStats, setRealtimeStats] = useState<any>(null);
+  const [radioStatus, setRadioStatus] = useState<any>(null);
+  const [liveMessages, setLiveMessages] = useState<any[]>([]);
+  const { subscribe, isConnected: wsConnected } = useWebSocket();
+
+  // Subscribe to WebSocket events for real-time updates
+  useEffect(() => {
+    const unsubscribe = subscribe((message: WebSocketMessage) => {
+      if (message.type === 'stats_update' && message.data) {
+        setRealtimeStats(message.data);
+      } else if (message.type === 'system_status' && message.data) {
+        setRadioStatus(message.data);
+      } else if (message.type === 'new_message' && message.data) {
+        setLiveMessages((prev) => [message.data, ...prev].slice(0, 10));
+      }
+    });
+
+    return unsubscribe;
+  }, [subscribe]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -310,7 +333,15 @@ export function DashboardPage() {
 
         {/* System status */}
         <Card padding="none">
-          <CardHeader title="System Status" className="px-6 pt-4" />
+          <CardHeader
+            title="System Status"
+            action={
+              <Badge variant={wsConnected ? 'success' : 'warning'} size="sm">
+                {wsConnected ? 'Live' : 'Polling'}
+              </Badge>
+            }
+            className="px-6 pt-4"
+          />
           <CardContent className="px-6 pb-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -324,14 +355,40 @@ export function DashboardPage() {
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Activity className="w-5 h-5 text-gray-400" />
+                  {radioStatus?.is_connected || stats?.system_status?.meshtastic_connected
+                    ? <Wifi className="w-5 h-5 text-green-500" />
+                    : <WifiOff className="w-5 h-5 text-red-400" />}
                   <span className="text-sm text-gray-700 dark:text-gray-300">
-                    Meshtastic Connection
+                    Radio Connection
                   </span>
                 </div>
-                <Badge variant={stats?.system_status?.meshtastic_connected ? 'success' : 'danger'}>
-                  {stats?.system_status?.meshtastic_connected ? 'Connected' : 'Disconnected'}
+                <Badge variant={
+                  (radioStatus?.is_connected || stats?.system_status?.meshtastic_connected)
+                    ? 'success' : 'danger'
+                }>
+                  {radioStatus?.status || (stats?.system_status?.meshtastic_connected ? 'connected' : 'disconnected')}
                 </Badge>
+              </div>
+              {radioStatus?.radio?.battery_level != null && (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Radio className="w-5 h-5 text-gray-400" />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Battery</span>
+                  </div>
+                  <span className="text-sm text-gray-500">
+                    {radioStatus.radio.battery_level}%
+                    {radioStatus.radio.battery_charging && ' (charging)'}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <MessageSquare className="w-5 h-5 text-gray-400" />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">Messages Processed</span>
+                </div>
+                <span className="text-sm text-gray-500">
+                  {radioStatus?.message_count ?? realtimeStats?.radio?.messages_processed ?? 'N/A'}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -346,6 +403,41 @@ export function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Live message feed */}
+      {liveMessages.length > 0 && (
+        <Card padding="none">
+          <CardHeader
+            title="Live Message Feed"
+            action={
+              <Badge variant="success" size="sm">
+                {liveMessages.length} recent
+              </Badge>
+            }
+            className="px-6 pt-4"
+          />
+          <CardContent className="px-6 pb-6">
+            <div className="space-y-3">
+              {liveMessages.map((msg, i) => (
+                <div key={i} className="flex items-start gap-3 text-sm">
+                  <Radio className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium text-gray-900 dark:text-white">
+                      {msg.sender_short || msg.sender_key?.substring(0, 8)}
+                    </span>
+                    <span className="text-gray-400 mx-1">
+                      {msg.hops != null && `(${msg.hops} hops)`}
+                    </span>
+                    <p className="text-gray-600 dark:text-gray-400 truncate">
+                      {msg.text}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

@@ -55,6 +55,7 @@ class BBSCore:
         self._running = False
         self._advert_task: Optional[asyncio.Task] = None
         self._stats_task: Optional[asyncio.Task] = None
+        self._ws_status_task: Optional[asyncio.Task] = None
 
     async def start(self) -> None:
         """
@@ -111,6 +112,9 @@ class BBSCore:
         # Start periodic MQTT stats publishing (if MQTT enabled)
         self._stats_task = asyncio.create_task(self._periodic_stats_publish())
 
+        # Start periodic WebSocket status broadcasting
+        self._ws_status_task = asyncio.create_task(self._periodic_ws_status())
+
         self._running = True
         logger.info(f"{self.config.bbs_name} is now online!")
 
@@ -122,7 +126,7 @@ class BBSCore:
         self._running = False
 
         # Cancel background tasks
-        for task in (self._advert_task, self._stats_task):
+        for task in (self._advert_task, self._stats_task, self._ws_status_task):
             if task:
                 task.cancel()
                 try:
@@ -188,6 +192,9 @@ class BBSCore:
         # Update activity timestamp
         await self.state_manager.update_activity()
 
+        # Notify WebSocket clients of new message
+        await self._ws_notify_message(message)
+
         # Create database session and dispatcher
         with get_session() as session:
             dispatcher = CommandDispatcher(
@@ -249,6 +256,63 @@ class BBSCore:
                 if success and i < len(lines) - 1:
                     logger.debug(f"Chunk sent, waiting {delay}s before next")
                     await asyncio.sleep(delay)
+
+    async def _ws_notify_message(self, message: Message) -> None:
+        """Notify WebSocket clients about a new incoming message."""
+        try:
+            from web.websocket.manager import get_connection_manager, EventType as WSEventType
+
+            manager = get_connection_manager()
+            if manager.connection_count == 0:
+                return
+
+            await manager.broadcast_message_event(
+                WSEventType.NEW_MESSAGE,
+                {
+                    "sender_key": message.sender_key,
+                    "sender_short": message.sender_short,
+                    "text": message.text[:100],
+                    "hops": message.hops,
+                    "rssi": message.rssi,
+                },
+            )
+        except Exception:
+            pass  # WebSocket not available
+
+    async def _periodic_ws_status(self) -> None:
+        """
+        Periodically broadcast radio status and stats to WebSocket clients.
+
+        Runs every 30 seconds. Does nothing if no clients are connected.
+        """
+        interval = 30
+
+        while self._running:
+            try:
+                await asyncio.sleep(interval)
+
+                from web.websocket.manager import get_connection_manager
+
+                manager = get_connection_manager()
+                if manager.connection_count == 0:
+                    continue
+
+                # Broadcast radio status
+                state_dict = self.state_manager.to_dict()
+                await manager.broadcast_system_status(state_dict)
+
+                # Broadcast stats update
+                with get_session() as session:
+                    from bbs.services.stats_collector import StatsCollector
+                    collector = StatsCollector(session)
+                    stats = collector.collect()
+
+                await manager.broadcast_stats_update(stats)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error broadcasting WebSocket status: {e}")
 
     async def _periodic_advert(self) -> None:
         """
