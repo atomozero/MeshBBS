@@ -624,13 +624,21 @@ def _render_user_rows(users):
             actions = f'<button class="btn-sm btn-green" onclick="userAction(\'{key}\',\'unban\')">Sbanna</button>'
         elif u.get("muted"):
             actions = f'<button class="btn-sm btn-green" onclick="userAction(\'{key}\',\'unmute\')">Smuta</button>'
+        elif u.get("admin"):
+            actions = f'<button class="btn-sm btn-red" onclick="userAction(\'{key}\',\'demote\')">Declassa</button>'
+        elif u.get("moderator"):
+            actions = (
+                f'<button class="btn-sm btn-green" onclick="userAction(\'{key}\',\'promote_admin\')">Admin</button>'
+                f'<button class="btn-sm btn-red" onclick="userAction(\'{key}\',\'demote\')">Declassa</button>'
+                f'<button class="btn-sm btn-yellow" onclick="userAction(\'{key}\',\'mute\')">Mute</button>'
+            )
         else:
-            if not u.get("admin"):
-                actions = (
-                    f'<button class="btn-sm btn-red" onclick="userAction(\'{key}\',\'ban\')">Ban</button>'
-                    f'<button class="btn-sm btn-yellow" onclick="userAction(\'{key}\',\'mute\')">Mute</button>'
-                    f'<button class="btn-sm btn-blue" onclick="userAction(\'{key}\',\'kick\')">Kick</button>'
-                )
+            actions = (
+                f'<button class="btn-sm btn-green" onclick="userAction(\'{key}\',\'promote\')">Mod</button>'
+                f'<button class="btn-sm btn-red" onclick="userAction(\'{key}\',\'ban\')">Ban</button>'
+                f'<button class="btn-sm btn-yellow" onclick="userAction(\'{key}\',\'mute\')">Mute</button>'
+                f'<button class="btn-sm btn-blue" onclick="userAction(\'{key}\',\'kick\')">Kick</button>'
+            )
 
         rows += f"""<tr>
             <td>{u['name']}</td>
@@ -840,7 +848,8 @@ def user_action(key, action):
     """Execute admin action on a user."""
     response.content_type = "application/json"
 
-    valid_actions = {"ban", "unban", "mute", "unmute", "kick", "unkick"}
+    valid_actions = {"ban", "unban", "mute", "unmute", "kick", "unkick",
+                     "promote", "promote_admin", "demote"}
     if action not in valid_actions:
         return json.dumps({"ok": False, "message": f"Azione '{action}' non valida"})
 
@@ -874,6 +883,18 @@ def user_action(key, action):
             elif action == "unkick":
                 user.unkick()
                 log_activity(session, EventType.USER_UNKICKED, user_key=key, details="Via web admin")
+            elif action == "promote":
+                user.promote_to_moderator()
+                log_activity(session, EventType.USER_PROMOTED, user_key=key, details="Moderatore via web admin")
+            elif action == "promote_admin":
+                user.promote_to_admin()
+                log_activity(session, EventType.USER_PROMOTED, user_key=key, details="Admin via web admin")
+            elif action == "demote":
+                if user.is_admin:
+                    user.demote_from_admin()
+                elif user.is_moderator:
+                    user.demote_from_moderator()
+                log_activity(session, EventType.USER_DEMOTED, user_key=key, details="Via web admin")
 
             session.commit()
 
@@ -881,6 +902,9 @@ def user_action(key, action):
                 "ban": "bannato", "unban": "sbannato",
                 "mute": "mutato", "unmute": "smutato",
                 "kick": "kickato (60 min)", "unkick": "unkickato",
+                "promote": "promosso a moderatore",
+                "promote_admin": "promosso ad admin",
+                "demote": "declassato",
             }
             return json.dumps({"ok": True, "message": f"{name} {action_names[action]}"})
 
@@ -1082,6 +1106,7 @@ def _get_users():
                     "name": u.display_name,
                     "key": u.public_key,
                     "admin": u.is_admin,
+                    "moderator": u.is_moderator,
                     "banned": u.is_banned,
                     "muted": u.is_muted,
                     "messages": msg_count,
