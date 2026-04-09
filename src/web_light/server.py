@@ -988,7 +988,8 @@ def _get_mesh_nodes():
     """Get mesh network nodes from companion radio."""
     NODE_TYPES = {0: "---", 1: "CLI", 2: "RPT", 3: "ROOM", 4: "SENS"}
     try:
-        from bbs.runtime import get_bbs_instance
+        from bbs.runtime import get_bbs_instance, get_event_loop
+        import asyncio
 
         bbs = get_bbs_instance()
         if bbs is None or not bbs._running:
@@ -997,6 +998,17 @@ def _get_mesh_nodes():
         mc = bbs.connection._meshcore
         if mc is None:
             return []
+
+        # Refresh contacts from the radio (must run in the async loop)
+        loop = get_event_loop()
+        if loop is not None:
+            try:
+                future = asyncio.run_coroutine_threadsafe(
+                    mc.commands.get_contacts(), loop
+                )
+                future.result(timeout=10)
+            except Exception:
+                pass  # Use cached contacts
 
         contacts = mc.contacts or {}
         nodes = []
