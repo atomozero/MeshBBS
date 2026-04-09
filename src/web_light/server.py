@@ -1387,11 +1387,11 @@ def _format_uptime(seconds):
 
 
 def _render_activity_chart():
-    """Render a CSS bar chart showing messages per hour (last 24h)."""
+    """Render a CSS bar chart showing messages and adverts per hour (last 24h)."""
     try:
         from bbs.models.base import get_session
         from bbs.models.message import Message
-        from sqlalchemy import func
+        from bbs.models.activity_log import ActivityLog
 
         with get_session() as session:
             now = datetime.utcnow()
@@ -1400,32 +1400,52 @@ def _render_activity_chart():
             for i in range(23, -1, -1):
                 hour_start = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=i)
                 hour_end = hour_start + timedelta(hours=1)
-                count = session.query(Message).filter(
+
+                msg_count = session.query(Message).filter(
                     Message.timestamp >= hour_start,
                     Message.timestamp < hour_end,
                 ).count()
-                hours_data.append((hour_start.strftime("%H"), count))
 
-            max_count = max((c for _, c in hours_data), default=1) or 1
+                adv_count = session.query(ActivityLog).filter(
+                    ActivityLog.timestamp >= hour_start,
+                    ActivityLog.timestamp < hour_end,
+                    ActivityLog.event_type == "ADVERT_SENT",
+                ).count()
+
+                hours_data.append((hour_start.strftime("%H"), msg_count, adv_count))
+
+            max_val = max((m + a for _, m, a in hours_data), default=1) or 1
 
             bars = ""
-            for hour, count in hours_data:
-                height = max(2, int(count / max_count * 60))
+            for hour, msg_count, adv_count in hours_data:
+                msg_h = max(1, int(msg_count / max_val * 60))
+                adv_h = max(0, int(adv_count / max_val * 60))
+                total_title = f"{hour}:00 - {msg_count} msg, {adv_count} adv"
+
                 bars += (
-                    f'<div style="display:inline-block;width:3.5%;margin:0 0.3%;vertical-align:bottom">'
-                    f'<div style="height:{height}px;background:#3b82f6;border-radius:2px 2px 0 0" '
-                    f'title="{hour}:00 - {count} msg"></div>'
+                    f'<div style="display:inline-block;width:3.5%;margin:0 0.3%;vertical-align:bottom" title="{total_title}">'
+                    f'<div style="height:{adv_h}px;background:#fbbf24;border-radius:2px 2px 0 0"></div>'
+                    f'<div style="height:{msg_h}px;background:#3b82f6;border-radius:{("0" if adv_h else "2px 2px")} 0 0"></div>'
                     f'<div style="font-size:0.55rem;color:#64748b;text-align:center">{hour}</div>'
                     f'</div>'
                 )
 
-            total_24h = sum(c for _, c in hours_data)
+            total_msg = sum(m for _, m, _ in hours_data)
+            total_adv = sum(a for _, _, a in hours_data)
+
+            legend = (
+                '<div style="margin-top:0.5rem;font-size:0.7rem;color:#94a3b8">'
+                '<span style="display:inline-block;width:10px;height:10px;background:#3b82f6;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Messaggi '
+                '<span style="display:inline-block;width:10px;height:10px;background:#fbbf24;border-radius:2px;margin-right:3px;margin-left:8px;vertical-align:middle"></span>Advert'
+                '</div>'
+            )
 
             return f"""
             <div class="section">
-            <h2>Attivita 24h <span style="font-size:0.75rem;color:#64748b;font-weight:normal">({total_24h} messaggi)</span></h2>
+            <h2>Attivita 24h <span style="font-size:0.75rem;color:#64748b;font-weight:normal">({total_msg} msg, {total_adv} adv)</span></h2>
             <div class="card" style="padding:0.75rem">
                 <div style="height:80px;display:flex;align-items:flex-end">{bars}</div>
+                {legend}
             </div>
             </div>
             """
