@@ -70,48 +70,66 @@ a:hover { text-decoration: underline; }
 
 .container { max-width: 960px; margin: 0 auto; padding: 1rem; }
 
+/* Navigation */
 nav { background: #1e293b; border-bottom: 1px solid #334155; padding: 0.75rem 1rem; }
-nav .inner { max-width: 960px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+nav .inner { max-width: 960px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
 nav .brand { font-weight: 700; font-size: 1.1rem; color: #60a5fa; }
+nav .hamburger { display: none; background: none; border: none; color: #94a3b8; font-size: 1.5rem; cursor: pointer; padding: 0.25rem; width: auto; }
+nav .links { display: flex; align-items: center; }
 nav .links a { margin-left: 1.5rem; color: #94a3b8; font-size: 0.9rem; }
 nav .links a:hover { color: #e2e8f0; }
 
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 1rem 0; }
-.card { background: #1e293b; border-radius: 8px; padding: 1.25rem; border: 1px solid #334155; }
-.card h3 { font-size: 0.8rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
-.card .value { font-size: 1.8rem; font-weight: 700; color: #f1f5f9; }
-.card .sub { font-size: 0.75rem; color: #64748b; margin-top: 0.25rem; }
+/* Stats cards */
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin: 1rem 0; }
+.card { background: #1e293b; border-radius: 8px; padding: 1rem; border: 1px solid #334155; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.card h3 { font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+.card .value { font-size: 1.5rem; font-weight: 700; color: #f1f5f9; }
+.card .sub { font-size: 0.7rem; color: #64748b; margin-top: 0.25rem; }
 
+/* Badges */
 .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
 .badge-green { background: #166534; color: #4ade80; }
 .badge-red { background: #7f1d1d; color: #f87171; }
 .badge-yellow { background: #713f12; color: #fbbf24; }
 
-table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
-th, td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid #334155; font-size: 0.85rem; }
-th { color: #94a3b8; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; }
+/* Tables — scrollable on mobile */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table { width: 100%; border-collapse: collapse; margin: 0.5rem 0; min-width: 500px; }
+th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid #334155; font-size: 0.8rem; white-space: nowrap; }
+th { color: #94a3b8; font-weight: 600; font-size: 0.7rem; text-transform: uppercase; position: sticky; top: 0; background: #1e293b; }
 tr:hover { background: #1e293b; }
+td.wrap { white-space: normal; word-break: break-word; min-width: 120px; max-width: 200px; }
 
 .section { margin: 1.5rem 0; }
-.section h2 { font-size: 1.1rem; margin-bottom: 0.75rem; color: #f1f5f9; }
+.section h2 { font-size: 1rem; margin-bottom: 0.75rem; color: #f1f5f9; }
 
-.login-box { max-width: 320px; margin: 4rem auto; }
+/* Login */
+.login-box { max-width: 320px; margin: 3rem auto; padding: 0 1rem; }
 .login-box h1 { text-align: center; margin-bottom: 1.5rem; }
 input[type=text], input[type=password] {
     width: 100%; padding: 0.6rem; margin-bottom: 0.75rem;
     background: #1e293b; border: 1px solid #475569; border-radius: 6px;
-    color: #e2e8f0; font-size: 0.9rem;
+    color: #e2e8f0; font-size: 1rem;
 }
 button { width: 100%; padding: 0.6rem; background: #3b82f6; color: white;
          border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600; }
 button:hover { background: #2563eb; }
 .error { color: #f87171; font-size: 0.85rem; margin-bottom: 0.75rem; text-align: center; }
 .footer { text-align: center; color: #475569; font-size: 0.75rem; margin-top: 2rem; padding: 1rem; }
-.msg-feed { max-height: 300px; overflow-y: auto; }
-.msg-item { padding: 0.5rem 0; border-bottom: 1px solid #1e293b; font-size: 0.85rem; }
-.msg-sender { color: #60a5fa; font-weight: 600; }
-.msg-time { color: #64748b; font-size: 0.75rem; }
-.refresh-note { font-size: 0.75rem; color: #64748b; }
+
+/* Mobile responsive */
+@media (max-width: 640px) {
+    nav .hamburger { display: block; }
+    nav .links { display: none; width: 100%; flex-direction: column; align-items: stretch; margin-top: 0.5rem; }
+    nav .links.open { display: flex; }
+    nav .links a { margin: 0; padding: 0.6rem 0; border-top: 1px solid #334155; text-align: center; }
+    .grid { grid-template-columns: repeat(2, 1fr); }
+    .card .value { font-size: 1.3rem; }
+    h1 { font-size: 1.3rem; }
+    .container { padding: 0.75rem; }
+    table { min-width: 400px; }
+    th, td { padding: 0.4rem; font-size: 0.75rem; }
+}
 """
 
 
@@ -132,8 +150,9 @@ def page(title, content, active=""):
 <body>
 <nav>
 <div class="inner">
-  <span class="brand">MeshBBS Admin</span>
-  <div class="links">
+  <span class="brand">MeshBBS</span>
+  <button class="hamburger" onclick="document.getElementById('nav-links').classList.toggle('open')">&#9776;</button>
+  <div class="links" id="nav-links">
     {nav_link('/', 'Dashboard', 'dashboard')}
     {nav_link('/messages', 'Messaggi', 'messages')}
     {nav_link('/users', 'Utenti', 'users')}
@@ -405,7 +424,7 @@ def partial_messages():
             <td>#{msg['id']}</td>
             <td>{msg['author']}</td>
             <td>{msg['area']}</td>
-            <td>{msg['body'][:60]}{'...' if len(msg['body']) > 60 else ''}</td>
+            <td class="wrap">{msg['body'][:60]}{'...' if len(msg['body']) > 60 else ''}</td>
             <td>{msg['time']}</td>
         </tr>"""
     return f"""<table>
@@ -475,7 +494,7 @@ def messages_page():
             <td>#{msg['id']}</td>
             <td>{msg['author']}</td>
             <td>{msg['area']}</td>
-            <td>{msg['body'][:60]}{'...' if len(msg['body']) > 60 else ''}</td>
+            <td class="wrap">{msg['body'][:60]}{'...' if len(msg['body']) > 60 else ''}</td>
             <td>{msg['time']}</td>
         </tr>"""
 
