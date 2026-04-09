@@ -20,9 +20,11 @@ MeshCore BBS provides classic BBS functionality over MeshCore mesh networks. It 
 - **Activity Logging**: Track system events and user activity
 - **Mock Mode**: Development and testing without hardware
 
-### Web Administration (NEW in v1.4)
+### Web Administration
+- **Unified Launcher**: Single command to start BBS + Web (`python launcher.py`)
 - **React Admin Panel**: Modern responsive web interface
-- **Dashboard**: Real-time statistics and activity feed
+- **Real-time Dashboard**: Live stats, radio status, and message feed via WebSocket
+- **BBS Control**: Start/stop/restart BBS and send adverts from the web
 - **User Management**: View, ban, unban, mute, kick, promote users
 - **Message Moderation**: Search, view, delete messages
 - **Area Management**: Create, edit, delete message areas
@@ -87,39 +89,47 @@ npm run dev
 
 ## Quick Start
 
+### Unified Launcher (Recommended)
+
+Start both BBS radio service and web admin in a single command:
+
+```bash
+cd src
+python launcher.py --debug                     # BBS + Web
+python launcher.py --web-only                  # Web server only
+python launcher.py --bbs-only                  # BBS radio only
+python launcher.py -p /dev/ttyACM0 --web-port 9090  # Custom options
+```
+
+Access the admin panel at http://localhost:8080
+
+Default credentials: `admin` / `meshbbs123`
+
 ### Development Mode (No Hardware)
 
 The BBS runs in mock mode by default when no hardware is available:
 
 ```bash
 cd src
-python main.py --debug
+python launcher.py --debug
 ```
 
-### Web Interface
-
-Start the API server and web interface:
+### Legacy Startup (Separate Processes)
 
 ```bash
-# Terminal 1: Start API
+# Terminal 1: BBS only
+cd src
+python main.py -p /dev/ttyUSB0
+
+# Terminal 2: Web only
 cd src
 uvicorn web.main:app --reload --port 8080
-
-# Terminal 2: Start frontend dev server
-cd web
-npm run dev
 ```
-
-Access the admin panel at http://localhost:3000
-
-Default credentials: `admin` / `meshbbs123`
 
 ### Production Mode
 
-Connect your MeshCore companion radio and specify the serial port:
-
 ```bash
-python main.py -p /dev/ttyUSB0 -n "My BBS"
+python launcher.py -p /dev/ttyUSB0 -n "My BBS"
 ```
 
 ## Command Line Options

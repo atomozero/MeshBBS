@@ -163,6 +163,22 @@ MeshBBS si configura principalmente tramite variabili d'ambiente. In produzione,
 | `MQTT_QOS` | `1` | QoS level (0, 1, 2) |
 | `MQTT_RETAIN` | `false` | Retain messages |
 
+### Launcher Unificato
+
+Il launcher (`python launcher.py`) supporta le seguenti opzioni:
+
+| Opzione | Default | Descrizione |
+|---------|---------|-------------|
+| `-p`, `--port` | `/dev/ttyUSB0` | Porta seriale companion radio |
+| `-b`, `--baud` | `115200` | Baud rate |
+| `-d`, `--database` | `data/bbs.db` | Path database |
+| `-n`, `--name` | `MeshCore BBS` | Nome BBS |
+| `--web-host` | `0.0.0.0` | Indirizzo bind web server |
+| `--web-port` | `8080` | Porta web server |
+| `--web-only` | | Avvia solo il web server |
+| `--bbs-only` | | Avvia solo il BBS radio |
+| `--debug` | | Abilita log debug |
+
 ### Logging
 
 | Variabile | Default | Descrizione |

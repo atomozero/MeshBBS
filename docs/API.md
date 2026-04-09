@@ -529,6 +529,60 @@ Health check rapido (senza autenticazione).
 
 ---
 
+### BBS Control
+
+#### GET /bbs/status
+
+Stato del servizio BBS radio (richiede autenticazione admin).
+
+**Risposta:**
+```json
+{
+  "bbs_running": true,
+  "radio": {
+    "status": "connected",
+    "is_connected": true,
+    "radio": {
+      "public_key": "ABC123...",
+      "name": "MeshBBS Node",
+      "port": "/dev/ttyUSB0",
+      "battery_level": 85,
+      "battery_charging": false
+    },
+    "message_count": 1234,
+    "reconnect_attempts": 0
+  },
+  "radio_uptime_seconds": 86400,
+  "timestamp": "2026-01-18T10:30:00Z"
+}
+```
+
+#### POST /bbs/restart
+
+Riavvia il servizio BBS radio (solo superadmin). Disponibile solo con il launcher unificato.
+
+**Risposta:**
+```json
+{
+  "message": "Riavvio BBS in corso",
+  "timestamp": "2026-01-18T10:30:00Z"
+}
+```
+
+#### POST /bbs/advert
+
+Invia manualmente un advertisement sulla rete mesh.
+
+**Risposta:**
+```json
+{
+  "message": "Advertisement inviato",
+  "timestamp": "2026-01-18T10:30:00Z"
+}
+```
+
+---
+
 ### Settings
 
 #### GET /settings
@@ -673,19 +727,36 @@ ws.onopen = () => {
 
 ### Eventi
 
-**stats_update** - Aggiornamento statistiche
+Il server BBS invia automaticamente eventi ai client WebSocket connessi:
+
+**stats_update** - Statistiche aggiornate (ogni 30 secondi)
 ```json
 {
   "type": "stats_update",
   "data": {
-    "total_users": 151,
-    "active_users": 24,
-    "messages_today": 46
-  }
+    "users": {"total": 151, "active_24h": 24},
+    "messages": {"public": {"total": 5420, "today": 46, "last_hour": 8}},
+    "radio": {"connected": true, "messages_processed": 1234}
+  },
+  "timestamp": "2026-01-18T10:30:00Z"
 }
 ```
 
-**new_message** - Nuovo messaggio
+**system_status** - Stato radio aggiornato (ogni 30 secondi, topic: system)
+```json
+{
+  "type": "system_status",
+  "data": {
+    "status": "connected",
+    "is_connected": true,
+    "radio": {"name": "MeshBBS Node", "battery_level": 85},
+    "message_count": 1234
+  },
+  "timestamp": "2026-01-18T10:30:00Z"
+}
+```
+
+**new_message** - Nuovo messaggio ricevuto dal mesh (topic: messages)
 ```json
 {
   "type": "new_message",
