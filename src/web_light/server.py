@@ -767,8 +767,8 @@ def network_page():
         {map_html}
         <div class="card"><div id="live-content">
         <table>
-        <tr><th>Nome</th><th>Tipo</th><th>Chiave</th><th>Percorso</th></tr>
-        {rows if rows else '<tr><td colspan="4" style="text-align:center;color:#64748b">Nessun nodo visibile</td></tr>'}
+        <tr><th>Nome</th><th>Tipo</th><th>Hop</th><th>Chiave</th><th>Percorso</th></tr>
+        {rows if rows else '<tr><td colspan="5" style="text-align:center;color:#64748b">Nessun nodo visibile</td></tr>'}
         </table>
         </div></div>
     """, active="network")
@@ -799,17 +799,20 @@ def _render_network_rows(nodes):
             continue
         label = type_labels.get(t, t)
         badge = type_badges.get(t, f'<span class="badge">{t}</span>')
-        rows += f'<tr><td colspan="4" style="padding-top:1rem"><strong>{badge} {label} ({len(groups[t])})</strong></td></tr>'
+        rows += f'<tr><td colspan="5" style="padding-top:1rem"><strong>{badge} {label} ({len(groups[t])})</strong></td></tr>'
         for n in groups[t]:
             path = n.get("path", "")
+            hops = n.get("hops", 0)
+            hop_badge = f'<span class="badge" style="background:#334155;color:#94a3b8">{hops}h</span>' if hops > 0 else '<span class="badge badge-green">0h</span>'
             gps = ""
             if "lat" in n and "lon" in n:
                 gps = f' <span style="color:#64748b;font-size:0.7rem">GPS</span>'
             rows += f"""<tr>
                 <td>{n['name']}{gps}</td>
                 <td>{badge}</td>
+                <td>{hop_badge}</td>
                 <td><code>{n['key'][:12]}...</code></td>
-                <td>{path}</td>
+                <td class="wrap">{path}</td>
             </tr>"""
 
     return rows
@@ -1031,21 +1034,63 @@ def _get_mesh_nodes():
                 pass  # Use cached contacts
 
         contacts = mc.contacts or {}
+
+        # First pass: build repeater lookup by path hash prefix
+        repeaters = {}
+        for key, info in contacts.items():
+            if info.get("type") == 2:  # RPT
+                pub_key = info.get("public_key", key)
+                if isinstance(pub_key, bytes):
+                    pub_key = pub_key.hex()
+                name = info.get("adv_name", "") or info.get("name", pub_key[:8])
+                repeaters[pub_key[:8]] = name
+
+        # Second pass: build node list with route info
         nodes = []
         for key, info in contacts.items():
             node_type = NODE_TYPES.get(info.get("type", 0), "?")
-            name = info.get("name", key[:8] if isinstance(key, str) else "?")
-            adv_name = info.get("adv_name", "")
-            path = f"via {adv_name}" if adv_name else "diretto"
-            pub_key = info.get("pubkey", key)
+            name = info.get("adv_name", "") or info.get("name", key[:8] if isinstance(key, str) else "?")
+            pub_key = info.get("public_key", key)
             if isinstance(pub_key, bytes):
                 pub_key = pub_key.hex()
+
+            # Determine route
+            out_path_len = info.get("out_path_len", 0)
+            out_path = info.get("out_path", "")
+
+            if out_path_len and out_path_len > 0 and out_path:
+                # Node communicates via repeater(s)
+                # Try to match path hash with known repeaters
+                path_parts = []
+                # out_path is hex string of hop hashes
+                hash_mode = info.get("out_path_hash_mode", 1)
+                hash_size = (hash_mode + 1) if hash_mode >= 0 else 2
+                for i in range(0, len(out_path), hash_size * 2):
+                    hop_hash = out_path[i:i + hash_size * 2]
+                    if hop_hash and hop_hash != "00" * hash_size:
+                        # Try to find matching repeater
+                        matched = False
+                        for rpt_key, rpt_name in repeaters.items():
+                            if rpt_key.startswith(hop_hash) or hop_hash in rpt_key:
+                                path_parts.append(rpt_name)
+                                matched = True
+                                break
+                        if not matched:
+                            path_parts.append(f"hop:{hop_hash[:6]}")
+
+                if path_parts:
+                    path = "via " + " > ".join(path_parts)
+                else:
+                    path = f"{out_path_len} hop"
+            else:
+                path = "diretto"
 
             node_data = {
                 "name": name,
                 "type": node_type,
                 "key": str(pub_key),
                 "path": path,
+                "hops": out_path_len if out_path_len and out_path_len > 0 else 0,
             }
 
             # Add GPS coordinates if available

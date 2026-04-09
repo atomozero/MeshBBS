@@ -52,26 +52,36 @@ class NodesCommand(BaseCommand):
             if not contacts:
                 return CommandResult.ok("[BBS] Nessun nodo visibile")
 
-            lines = [f"[BBS] Nodi sulla rete ({len(contacts)}):"]
+            # Collect repeater names for path resolution
+            repeaters = {}
+            for k, info in contacts.items():
+                if info.get("type") == 2:  # RPT
+                    pk = info.get("public_key", k)
+                    if isinstance(pk, bytes):
+                        pk = pk.hex()
+                    rname = info.get("adv_name", "") or info.get("name", pk[:8])
+                    repeaters[pk[:8]] = rname
+
+            rpt_count = len(repeaters)
+            cli_count = sum(1 for i in contacts.values() if i.get("type") == 1)
+
+            lines = [f"[BBS] Rete: {len(contacts)} nodi ({rpt_count} RPT, {cli_count} CLI)"]
 
             for key, info in contacts.items():
-                name = info.get("name", key[:8])
+                name = info.get("adv_name", "") or info.get("name", key[:8])
                 node_type = NODE_TYPES.get(info.get("type", 0), "?")
-                flags = info.get("flags", 0)
-                path_str = ""
-
-                # Show path/route info if available
-                adv_name = info.get("adv_name", "")
-                if adv_name:
-                    path_str = f" via {adv_name}"
+                out_path_len = info.get("out_path_len", 0)
 
                 marker = ""
                 if node_type == "RPT":
-                    marker = " [R]"
+                    marker = "[R]"
                 elif node_type == "ROOM":
-                    marker = " [B]"
+                    marker = "[B]"
+                elif node_type == "SENS":
+                    marker = "[S]"
 
-                lines.append(f"  {name}{marker}{path_str}")
+                hop_str = f" {out_path_len}h" if out_path_len and out_path_len > 0 else ""
+                lines.append(f"  {marker}{name}{hop_str}")
 
             return CommandResult.ok("\n".join(lines))
 
