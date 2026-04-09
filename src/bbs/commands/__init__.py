@@ -6,6 +6,7 @@ from .dispatcher import CommandDispatcher
 
 # Import all command modules so @CommandRegistry.register decorators execute
 from . import (  # noqa: F401
+    advert_cmd,
     help_cmd,
     list_cmd,
     post_cmd,

@@ -346,6 +346,7 @@ def dashboard():
             <tr><td>Uptime</td><td>{_format_uptime(radio.get('uptime_seconds', 0))}</td></tr>
             <tr><td>Messaggi</td><td>{radio.get('messages_processed', 0)}</td></tr>
             </table>
+            <button class="btn-sm btn-blue" style="margin-top:0.5rem" onclick="sendAdvert()">Invia Advert</button>
         </div>
         </div>
         """
@@ -374,7 +375,21 @@ def dashboard():
         <h1 style="margin:1rem 0">Dashboard
             <span id="live-indicator" class="badge badge-green" style="font-size:0.6rem;vertical-align:middle;opacity:0.5">LIVE</span>
         </h1>
+        <div id="toast-area"></div>
         <div id="live-content">{live_content}</div>
+        <script>
+        function sendAdvert() {{
+            fetch('/api/advert', {{method:'POST', credentials:'same-origin'}})
+            .then(function(r) {{ return r.json(); }})
+            .then(function(d) {{
+                var ta = document.getElementById('toast-area');
+                var cls = d.ok ? 'toast success' : 'toast error';
+                ta.innerHTML = '<div class="' + cls + '">' + d.message + '</div>';
+                setTimeout(function(){{ ta.innerHTML = ''; }}, 3000);
+            }})
+            .catch(function(){{ alert('Errore di rete'); }});
+        }}
+        </script>
     """, active="dashboard")
 
 
@@ -432,6 +447,7 @@ def partial_dashboard():
             <tr><td>Uptime</td><td>{_format_uptime(radio.get('uptime_seconds', 0))}</td></tr>
             <tr><td>Messaggi</td><td>{radio.get('messages_processed', 0)}</td></tr>
             </table>
+            <button class="btn-sm btn-blue" style="margin-top:0.5rem" onclick="sendAdvert()">Invia Advert</button>
         </div>
         </div>
         """
@@ -718,6 +734,33 @@ def user_action(key, action):
 # ---------------------------------------------------------------
 # API JSON (per integrazioni esterne)
 # ---------------------------------------------------------------
+
+@app.route("/api/advert", method="POST")
+@require_auth
+def api_send_advert():
+    """Send a manual advertisement on the mesh network."""
+    response.content_type = "application/json"
+    try:
+        from launcher import get_bbs_instance
+
+        bbs = get_bbs_instance()
+        if bbs is None or not bbs._running:
+            return json.dumps({"ok": False, "message": "BBS non attivo"})
+
+        import asyncio
+        loop = asyncio.get_event_loop()
+        future = asyncio.run_coroutine_threadsafe(
+            bbs.connection.send_advert(flood=True), loop
+        )
+        success = future.result(timeout=15)
+
+        if success:
+            return json.dumps({"ok": True, "message": "Advertisement inviato"})
+        else:
+            return json.dumps({"ok": False, "message": "Invio fallito"})
+    except Exception as e:
+        return json.dumps({"ok": False, "message": str(e)})
+
 
 @app.route("/api/stats")
 @require_auth
