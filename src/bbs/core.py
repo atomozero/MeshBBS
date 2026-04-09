@@ -64,6 +64,7 @@ class BBSCore:
         self._advert_task: Optional[asyncio.Task] = None
         self._stats_task: Optional[asyncio.Task] = None
         self._ws_status_task: Optional[asyncio.Task] = None
+        self._beacon_task: Optional[asyncio.Task] = None
 
     async def start(self) -> None:
         """
@@ -127,6 +128,9 @@ class BBSCore:
         # Start periodic WebSocket status broadcasting
         self._ws_status_task = asyncio.create_task(self._periodic_ws_status())
 
+        # Start periodic beacon broadcast
+        self._beacon_task = asyncio.create_task(self._periodic_beacon())
+
         self._running = True
         logger.info(f"{self.config.bbs_name} is now online!")
 
@@ -138,7 +142,7 @@ class BBSCore:
         self._running = False
 
         # Cancel background tasks
-        for task in (self._advert_task, self._stats_task, self._ws_status_task):
+        for task in (self._advert_task, self._stats_task, self._ws_status_task, self._beacon_task):
             if task:
                 task.cancel()
                 try:
@@ -370,6 +374,41 @@ class BBSCore:
                 break
             except Exception as e:
                 logger.error(f"Error sending advert: {e}")
+
+    async def _periodic_beacon(self) -> None:
+        """
+        Periodically broadcast a beacon message on the mesh.
+
+        Announces the BBS presence so users know it exists.
+        Interval and message configurable. Set interval to 0 to disable.
+        """
+        interval = self.config.beacon_interval * 60  # config is in minutes
+        if interval <= 0:
+            logger.debug("Beacon disabled (interval=0)")
+            return
+
+        beacon_text = self.config.beacon_message.format(
+            name=self.config.bbs_name,
+        )
+
+        while self._running:
+            try:
+                await asyncio.sleep(interval)
+
+                if self._running and self.connection.connected:
+                    logger.info(f"Sending beacon: {beacon_text[:50]}...")
+                    try:
+                        mc = self.connection._meshcore
+                        if mc:
+                            await mc.commands.send_channel_msg(beacon_text)
+                            logger.info("Beacon sent on channel")
+                    except Exception as e:
+                        logger.warning(f"Beacon send failed: {e}")
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error sending beacon: {e}")
 
     async def _periodic_stats_publish(self) -> None:
         """

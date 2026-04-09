@@ -37,6 +37,8 @@ UPDATABLE_FIELDS = {
     "max_send_attempts",
     "send_retry_delay",
     "stats_publish_interval",
+    "beacon_interval",
+    "beacon_message",
 }
 
 
@@ -81,6 +83,10 @@ class Config:
 
     # Advert settings
     advert_interval_minutes: int = 180  # 3 hours like repeaters
+
+    # Beacon broadcast (0 = disabled)
+    beacon_interval: int = 0  # minutes between beacon broadcasts (0=off)
+    beacon_message: str = "{name} attivo! Scrivi !help per i comandi"
 
     # Statistics publishing interval (MQTT)
     stats_publish_interval: int = 300  # seconds (5 minutes)

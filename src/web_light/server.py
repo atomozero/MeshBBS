@@ -191,6 +191,7 @@ def page(title, content, active=""):
     {nav_link('/users', 'Utenti', 'users')}
     {nav_link('/network', 'Rete', 'network')}
     {nav_link('/logs', 'Log', 'logs')}
+    {nav_link('/settings', 'Config', 'settings')}
     {nav_link('/logout', 'Esci', '')}
   </div>
 </div>
@@ -397,7 +398,9 @@ def dashboard():
 
 def _render_dashboard_content(stats, radio, cards, radio_info, activity_html):
     """Render the dashboard inner content (used by both full page and partial)."""
-    return f"{cards}{radio_info}{activity_html}"
+    chart_html = _render_activity_chart()
+    alert_html = _render_repeater_alerts()
+    return f"{cards}{alert_html}{radio_info}{chart_html}{activity_html}"
 
 
 @app.route("/api/partial/dashboard")
@@ -862,6 +865,135 @@ def logs_page():
 
 
 # ---------------------------------------------------------------
+# Routes: Settings
+# ---------------------------------------------------------------
+
+@app.route("/settings")
+@require_auth
+def settings_page():
+    from utils.config import get_config
+    cfg = get_config()
+
+    return page("Impostazioni", f"""
+        <h1 style="margin:1rem 0">Impostazioni</h1>
+        <div id="toast-area"></div>
+        <form id="settings-form" onsubmit="return saveSettings(event)">
+        <div class="grid" style="grid-template-columns:1fr 1fr">
+            <div class="card">
+                <h3>BBS</h3>
+                <label style="font-size:0.8rem;color:#94a3b8">Nome BBS</label>
+                <input type="text" name="bbs_name" value="{cfg.bbs_name}" style="margin-bottom:0.5rem">
+                <label style="font-size:0.8rem;color:#94a3b8">Prefisso risposte</label>
+                <input type="text" name="response_prefix" value="{cfg.response_prefix}" style="margin-bottom:0.5rem">
+                <label style="font-size:0.8rem;color:#94a3b8">Area predefinita</label>
+                <input type="text" name="default_area" value="{cfg.default_area}" style="margin-bottom:0.5rem">
+            </div>
+            <div class="card">
+                <h3>Posizione</h3>
+                <label style="font-size:0.8rem;color:#94a3b8">Latitudine</label>
+                <input type="text" name="latitude" value="{cfg.latitude or ''}" placeholder="45.4986" style="margin-bottom:0.5rem">
+                <label style="font-size:0.8rem;color:#94a3b8">Longitudine</label>
+                <input type="text" name="longitude" value="{cfg.longitude or ''}" placeholder="12.2459" style="margin-bottom:0.5rem">
+            </div>
+            <div class="card">
+                <h3>Invio messaggi</h3>
+                <label style="font-size:0.8rem;color:#94a3b8">Delay tra chunk (sec)</label>
+                <input type="text" name="send_delay" value="{cfg.send_delay}" style="margin-bottom:0.5rem">
+                <label style="font-size:0.8rem;color:#94a3b8">Advert ogni (min)</label>
+                <input type="text" name="advert_interval_minutes" value="{cfg.advert_interval_minutes}" style="margin-bottom:0.5rem">
+            </div>
+            <div class="card">
+                <h3>Beacon</h3>
+                <label style="font-size:0.8rem;color:#94a3b8">Intervallo beacon (min, 0=off)</label>
+                <input type="text" name="beacon_interval" value="{cfg.beacon_interval}" style="margin-bottom:0.5rem">
+                <label style="font-size:0.8rem;color:#94a3b8">Messaggio beacon</label>
+                <input type="text" name="beacon_message" value="{cfg.beacon_message}" style="margin-bottom:0.5rem">
+            </div>
+            <div class="card">
+                <h3>Retention</h3>
+                <label style="font-size:0.8rem;color:#94a3b8">PM retention (giorni, 0=infinito)</label>
+                <input type="text" name="pm_retention_days" value="{cfg.pm_retention_days}" style="margin-bottom:0.5rem">
+                <label style="font-size:0.8rem;color:#94a3b8">Log retention (giorni)</label>
+                <input type="text" name="activity_log_retention_days" value="{cfg.activity_log_retention_days}" style="margin-bottom:0.5rem">
+            </div>
+        </div>
+        <button type="submit" style="margin-top:1rem;max-width:200px">Salva</button>
+        </form>
+        <script>
+        function saveSettings(e) {{
+            e.preventDefault();
+            var form = document.getElementById('settings-form');
+            var data = {{}};
+            var inputs = form.querySelectorAll('input');
+            inputs.forEach(function(inp) {{
+                var v = inp.value.trim();
+                if (v !== '') data[inp.name] = v;
+            }});
+            fetch('/api/settings', {{
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {{'Content-Type': 'application/json'}},
+                body: JSON.stringify(data)
+            }})
+            .then(function(r) {{ return r.json(); }})
+            .then(function(d) {{
+                var ta = document.getElementById('toast-area');
+                var cls = d.ok ? 'toast success' : 'toast error';
+                ta.innerHTML = '<div class="' + cls + '">' + d.message + '</div>';
+                setTimeout(function(){{ ta.innerHTML = ''; }}, 3000);
+            }})
+            .catch(function() {{ alert('Errore di rete'); }});
+            return false;
+        }}
+        </script>
+    """, active="settings")
+
+
+@app.route("/api/settings", method="POST")
+@require_auth
+def api_save_settings():
+    """Save BBS settings."""
+    response.content_type = "application/json"
+    try:
+        from utils.config import get_config
+        cfg = get_config()
+
+        data = request.json or {}
+        updates = {}
+
+        # String fields
+        for field in ("bbs_name", "default_area", "response_prefix", "beacon_message"):
+            if field in data and data[field]:
+                updates[field] = str(data[field])
+
+        # Float fields
+        for field in ("latitude", "longitude", "send_delay"):
+            if field in data and data[field]:
+                try:
+                    updates[field] = float(data[field])
+                except ValueError:
+                    pass
+
+        # Int fields
+        for field in ("advert_interval_minutes", "beacon_interval",
+                      "pm_retention_days", "activity_log_retention_days"):
+            if field in data and data[field]:
+                try:
+                    updates[field] = int(data[field])
+                except ValueError:
+                    pass
+
+        if updates:
+            cfg.update(updates)
+            return json.dumps({"ok": True, "message": f"{len(updates)} impostazioni salvate"})
+        else:
+            return json.dumps({"ok": False, "message": "Nessuna modifica"})
+
+    except Exception as e:
+        return json.dumps({"ok": False, "message": str(e)})
+
+
+# ---------------------------------------------------------------
 # Admin actions API
 # ---------------------------------------------------------------
 
@@ -1252,6 +1384,92 @@ def _format_uptime(seconds):
     if hours > 0:
         return f"{hours}h {mins}m"
     return f"{mins}m"
+
+
+def _render_activity_chart():
+    """Render a CSS bar chart showing messages per hour (last 24h)."""
+    try:
+        from bbs.models.base import get_session
+        from bbs.models.message import Message
+        from sqlalchemy import func
+
+        with get_session() as session:
+            now = datetime.utcnow()
+            hours_data = []
+
+            for i in range(23, -1, -1):
+                hour_start = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=i)
+                hour_end = hour_start + timedelta(hours=1)
+                count = session.query(Message).filter(
+                    Message.timestamp >= hour_start,
+                    Message.timestamp < hour_end,
+                ).count()
+                hours_data.append((hour_start.strftime("%H"), count))
+
+            max_count = max((c for _, c in hours_data), default=1) or 1
+
+            bars = ""
+            for hour, count in hours_data:
+                height = max(2, int(count / max_count * 60))
+                bars += (
+                    f'<div style="display:inline-block;width:3.5%;margin:0 0.3%;vertical-align:bottom">'
+                    f'<div style="height:{height}px;background:#3b82f6;border-radius:2px 2px 0 0" '
+                    f'title="{hour}:00 - {count} msg"></div>'
+                    f'<div style="font-size:0.55rem;color:#64748b;text-align:center">{hour}</div>'
+                    f'</div>'
+                )
+
+            total_24h = sum(c for _, c in hours_data)
+
+            return f"""
+            <div class="section">
+            <h2>Attivita 24h <span style="font-size:0.75rem;color:#64748b;font-weight:normal">({total_24h} messaggi)</span></h2>
+            <div class="card" style="padding:0.75rem">
+                <div style="height:80px;display:flex;align-items:flex-end">{bars}</div>
+            </div>
+            </div>
+            """
+    except Exception:
+        return ""
+
+
+# Track last seen repeaters for alerts
+_last_seen_repeaters = {}  # name -> timestamp
+
+
+def _render_repeater_alerts():
+    """Check for missing repeaters and render alert if any disappeared."""
+    global _last_seen_repeaters
+
+    try:
+        nodes = _get_mesh_nodes()
+        current_rpts = {n["name"]: n for n in nodes if n["type"] == "RPT"}
+        now = time.time()
+
+        # Update last seen
+        for name in current_rpts:
+            _last_seen_repeaters[name] = now
+
+        # Check for missing repeaters (seen before but not now)
+        alerts = []
+        for name, last_seen in list(_last_seen_repeaters.items()):
+            if name not in current_rpts and now - last_seen < 86400:  # within 24h
+                minutes_ago = int((now - last_seen) / 60)
+                if minutes_ago > 5:  # only alert after 5 min
+                    alerts.append(f"{name} non visto da {minutes_ago}m")
+
+        if not alerts:
+            return ""
+
+        alert_items = "".join(f"<li>{a}</li>" for a in alerts)
+        return f"""
+        <div class="card" style="border-color:#7f1d1d;margin-bottom:1rem">
+            <h3 style="color:#f87171">Repeater non raggiungibili</h3>
+            <ul style="margin:0.5rem 0 0 1rem;font-size:0.85rem">{alert_items}</ul>
+        </div>
+        """
+    except Exception:
+        return ""
 
 
 # ---------------------------------------------------------------

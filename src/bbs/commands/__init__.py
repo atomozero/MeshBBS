@@ -8,6 +8,7 @@ from .dispatcher import CommandDispatcher
 from . import (  # noqa: F401
     advert_cmd,
     board_cmd,
+    fortune_cmd,
     help_cmd,
     list_cmd,
     mail_cmd,
