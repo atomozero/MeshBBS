@@ -7,10 +7,14 @@ from .dispatcher import CommandDispatcher
 # Import all command modules so @CommandRegistry.register decorators execute
 from . import (  # noqa: F401
     advert_cmd,
+    board_cmd,
     help_cmd,
     list_cmd,
+    mail_cmd,
+    meteo_cmd,
     news_cmd,
     nodes_cmd,
+    ping_cmd,
     post_cmd,
     read_cmd,
     areas_cmd,

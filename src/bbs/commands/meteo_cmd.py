@@ -1,23 +1,33 @@
-# modules/meteo.py — Meteo via Open-Meteo API (gratuita, no API key)
+"""
+Meteo command for MeshCore BBS.
+
+Weather forecasts via Open-Meteo API (free, no API key required).
+
+MIT License - Copyright (c) 2026 MeshBBS Contributors
+"""
+
 import asyncio
 import json
 import logging
 import urllib.request
 import urllib.parse
 from time import time
+from typing import List, Optional, Tuple
 
-from dispatcher import command
-from config import (
-    NODE_LAT, NODE_LON,
-    METEO_CACHE_TTL, METEO_HTTP_TIMEOUT, METEO_CACHE_MAX, GEOCACHE_MAX,
-)
+from sqlalchemy.orm import Session
 
-log = logging.getLogger(__name__)
-_cache: dict[str, tuple[float, dict]] = {}
-_geocache: dict[str, tuple[float, float, float, str]] = {}  # nome -> (ts, lat, lon, nome)
+from .base import BaseCommand, CommandContext, CommandResult, CommandRegistry
 
-# Codici WMO meteo -> testo compatto
-_WMO_CODES = {
+logger = logging.getLogger(__name__)
+
+# Cache
+_meteo_cache = {}  # "lat,lon" -> (timestamp, data)
+_geo_cache = {}    # "city" -> (timestamp, lat, lon, name)
+CACHE_TTL = 600    # 10 minutes
+HTTP_TIMEOUT = 10
+
+# WMO weather codes -> compact Italian text
+_WMO = {
     0: "Sereno", 1: "Quasi sereno", 2: "Parz.nuvoloso", 3: "Nuvoloso",
     45: "Nebbia", 48: "Nebbia gelata",
     51: "Pioggerella", 53: "Pioggerella", 55: "Pioggerella forte",
@@ -28,72 +38,42 @@ _WMO_CODES = {
     95: "Temporale", 96: "Temporale grandine", 99: "Temporale grandine",
 }
 
-# Riferimento alla connessione companion per leggere le coordinate
-_conn = None
 
-
-def set_connection(conn):
-    global _conn
-    _conn = conn
-
-
-def _evict_cache(cache: dict, max_size: int, ttl: float):
-    """Rimuove entry scaduti; se ancora troppi, rimuove i piu' vecchi."""
-    now = time()
-    expired = [k for k, (ts, *_) in cache.items() if now - ts > ttl]
-    for k in expired:
-        del cache[k]
-    while len(cache) > max_size:
-        oldest = min(cache, key=lambda k: cache[k][0])
-        del cache[oldest]
-
-
-def _get_coords() -> tuple[float, float]:
-    """Restituisce lat, lon dal companion o default."""
-    if _conn and _conn.self_info:
-        si = _conn.self_info
-        lat = si.get("adv_lat", 0)
-        lon = si.get("adv_lon", 0)
-        if lat and lon:
-            return lat, lon
-    return NODE_LAT, NODE_LON
-
-
-def _geocode(city: str) -> tuple[float, float, str] | None:
-    """Converte nome citta' in coordinate via Open-Meteo Geocoding API."""
+def _geocode(city: str) -> Optional[Tuple[float, float, str]]:
+    """Convert city name to coordinates via Open-Meteo Geocoding API."""
     key = city.lower().strip()
-    if key in _geocache:
-        _ts, lat, lon, name = _geocache[key]
-        return lat, lon, name
+    now = time()
+    if key in _geo_cache:
+        ts, lat, lon, name = _geo_cache[key]
+        if now - ts < CACHE_TTL:
+            return lat, lon, name
 
     encoded = urllib.parse.quote(city)
     url = f"https://geocoding-api.open-meteo.com/v1/search?name={encoded}&count=1&language=it"
     try:
-        resp = urllib.request.urlopen(url, timeout=METEO_HTTP_TIMEOUT)
+        resp = urllib.request.urlopen(url, timeout=HTTP_TIMEOUT)
         data = json.loads(resp.read())
         results = data.get("results", [])
         if not results:
             return None
         r = results[0]
-        lat = r["latitude"]
-        lon = r["longitude"]
+        lat, lon = r["latitude"], r["longitude"]
         name = r.get("name", city)
-        _evict_cache(_geocache, GEOCACHE_MAX, METEO_CACHE_TTL)
-        _geocache[key] = (time(), lat, lon, name)
+        _geo_cache[key] = (now, lat, lon, name)
         return lat, lon, name
     except Exception as e:
-        log.error("Errore geocoding '%s': %s", city, e)
+        logger.error(f"Geocoding error for '{city}': {e}")
         return None
 
 
-def _fetch_meteo(lat: float, lon: float) -> dict | None:
-    """Fetch meteo da Open-Meteo API."""
+def _fetch_meteo(lat: float, lon: float) -> Optional[dict]:
+    """Fetch weather from Open-Meteo API."""
     cache_key = f"{lat:.2f},{lon:.2f}"
     now = time()
-    if cache_key in _cache:
-        cached_time, cached_data = _cache[cache_key]
-        if now - cached_time < METEO_CACHE_TTL:
-            return cached_data
+    if cache_key in _meteo_cache:
+        ts, data = _meteo_cache[cache_key]
+        if now - ts < CACHE_TTL:
+            return data
 
     url = (
         f"https://api.open-meteo.com/v1/forecast?"
@@ -103,22 +83,17 @@ def _fetch_meteo(lat: float, lon: float) -> dict | None:
         f"&timezone=Europe/Rome&forecast_days=3"
     )
     try:
-        resp = urllib.request.urlopen(url, timeout=METEO_HTTP_TIMEOUT)
+        resp = urllib.request.urlopen(url, timeout=HTTP_TIMEOUT)
         data = json.loads(resp.read())
-        _evict_cache(_cache, METEO_CACHE_MAX, METEO_CACHE_TTL)
-        _cache[cache_key] = (now, data)
+        _meteo_cache[cache_key] = (now, data)
         return data
     except Exception as e:
-        log.error("Errore fetch meteo: %s", e)
+        logger.error(f"Meteo fetch error: {e}")
         return None
 
 
-def _wmo(code: int) -> str:
-    return _WMO_CODES.get(code, f"cod.{code}")
-
-
 def _format_meteo(data: dict, location: str) -> str:
-    """Formatta i dati meteo in una stringa compatta."""
+    """Format weather data into compact string."""
     c = data.get("current", {})
     d = data.get("daily", {})
 
@@ -127,7 +102,7 @@ def _format_meteo(data: dict, location: str) -> str:
     wind = c.get("wind_speed_10m", "?")
     code = c.get("weather_code", 0)
 
-    lines = [f"{location}: {temp}C {_wmo(code)} U:{hum}% V:{wind}km/h"]
+    lines = [f"[BBS] {location}: {temp}C {_WMO.get(code, '?')} U:{hum}% V:{wind}km/h"]
 
     times = d.get("time", [])
     mins = d.get("temperature_2m_min", [])
@@ -136,28 +111,48 @@ def _format_meteo(data: dict, location: str) -> str:
 
     for i in range(min(3, len(times))):
         day = times[i][5:]  # "MM-DD"
-        lines.append(f"{day}: {mins[i]}/{maxs[i]}C {_wmo(codes[i])}")
+        lines.append(f"  {day}: {mins[i]}/{maxs[i]}C {_WMO.get(codes[i], '?')}")
 
     return "\n".join(lines)
 
 
-@command("!meteo")
-async def cmd_meteo(from_pubkey, args, db) -> str:
-    if args:
-        # !meteo <citta'> — HTTP in thread per non bloccare event loop
-        city = " ".join(args)
-        geo = await asyncio.to_thread(_geocode, city)
-        if not geo:
-            return f"Citta' '{city}' non trovata"
-        lat, lon, name = geo
+@CommandRegistry.register
+class MeteoCommand(BaseCommand):
+    """Show weather forecast."""
+
+    name = "meteo"
+    description = "Previsioni meteo"
+    usage = "!meteo [citta]\n  !meteo Roma\n  !meteo (usa posizione BBS)"
+    aliases = ["weather", "tempo"]
+
+    def __init__(self, session: Session):
+        self.session = session
+
+    async def execute(
+        self, ctx: CommandContext, args: List[str]
+    ) -> CommandResult:
+        if args:
+            # !meteo <city>
+            city = " ".join(args)
+            geo = await asyncio.to_thread(_geocode, city)
+            if not geo:
+                return CommandResult.fail(f"[BBS] Citta '{city}' non trovata")
+            lat, lon, name = geo
+        else:
+            # !meteo without args = BBS location
+            from utils.config import get_config
+            cfg = get_config()
+            lat = cfg.latitude
+            lon = cfg.longitude
+            name = "Qui"
+
+            if not lat or not lon:
+                return CommandResult.fail(
+                    "[BBS] Posizione BBS non configurata.\nUsa: !meteo <citta>"
+                )
+
         data = await asyncio.to_thread(_fetch_meteo, lat, lon)
         if not data:
-            return "Meteo non disponibile"
-        return _format_meteo(data, name)
-    else:
-        # !meteo senza argomenti = posizione BBS
-        lat, lon = _get_coords()
-        data = await asyncio.to_thread(_fetch_meteo, lat, lon)
-        if not data:
-            return "Meteo non disponibile"
-        return _format_meteo(data, "Qui")
+            return CommandResult.fail("[BBS] Meteo non disponibile")
+
+        return CommandResult.ok(_format_meteo(data, name))
