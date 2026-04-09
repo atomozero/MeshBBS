@@ -37,9 +37,11 @@ MeshCore BBS provides classic BBS functionality over MeshCore mesh networks. It 
 - **OpenAPI Docs**: Auto-generated API documentation
 
 ### Integrations
-- **MeshCore Hardware**: Full support via meshcore_py library
-- **MQTT**: Publish BBS events for home automation
+- **MeshCore Hardware**: Full support via meshcore_py library (Serial, BLE, TCP)
+- **MQTT**: Publish BBS events and statistics for home automation (Home Assistant, Node-RED)
+- **Statistics API**: Unified stats endpoint (`GET /api/v1/stats`) and periodic MQTT publishing
 - **Backup System**: Automatic scheduled backups
+- **Send Throttling**: Chunked message sending with configurable delay to prevent message loss on slow radio links
 
 ## Requirements
 
@@ -54,8 +56,8 @@ MeshCore BBS provides classic BBS functionality over MeshCore mesh networks. It 
 
 ```bash
 # Clone the repository
-git clone https://github.com/meshbbs/meshbbs.git
-cd meshbbs
+git clone https://github.com/atomozero/MeshBBS.git
+cd MeshBBS
 
 # Run automated installer
 sudo ./deploy/install.sh
@@ -67,8 +69,8 @@ See [docs/INSTALLATION.md](docs/INSTALLATION.md) for detailed instructions.
 
 ```bash
 # Clone the repository
-git clone https://github.com/meshbbs/meshbbs.git
-cd meshbbs
+git clone https://github.com/atomozero/MeshBBS.git
+cd MeshBBS
 
 # Create virtual environment
 python -m venv venv
@@ -265,56 +267,71 @@ Rate limit messages are shown in Italian:
 | `BBS_LOG_LEVEL` | `INFO` | Log level |
 | `BBS_NAME` | `MeshCore BBS` | BBS display name |
 | `BBS_DEFAULT_AREA` | `generale` | Default message area |
+| `BBS_LATITUDE` | (none) | BBS latitude (-90/+90) |
+| `BBS_LONGITUDE` | (none) | BBS longitude (-180/+180) |
 | `BBS_PM_RETENTION_DAYS` | `30` | Days to keep PMs (0=forever) |
 | `BBS_LOG_RETENTION_DAYS` | `90` | Days to keep logs (0=forever) |
 | `BBS_ALLOW_EPHEMERAL_PM` | `true` | Enable /msg! command |
+| `SEND_DELAY` | `3.0` | Seconds between response chunks |
+| `MAX_SEND_ATTEMPTS` | `2` | Max send retry attempts |
+| `SEND_RETRY_DELAY` | `2.0` | Base seconds between retries |
+| `STATS_PUBLISH_INTERVAL` | `300` | Seconds between MQTT stats publish |
+| `MQTT_ENABLED` | `false` | Enable MQTT integration |
+| `MQTT_HOST` | `localhost` | MQTT broker host |
+| `MQTT_PORT` | `1883` | MQTT broker port |
+
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the full list.
 
 ## Project Structure
 
 ```
-meshbbs/
+MeshBBS/
 ├── src/
-│   ├── main.py              # Entry point
+│   ├── main.py                  # Entry point
 │   ├── bbs/
-│   │   ├── core.py          # Main BBS logic
-│   │   ├── scheduler.py     # Background task scheduler
-│   │   ├── rate_limiter.py  # Anti-spam rate limiting
-│   │   ├── mentions.py      # @mention notification system
-│   │   ├── privacy.py       # Privacy/GDPR utilities
-│   │   ├── commands/        # Command handlers
-│   │   │   ├── base.py      # Base command class
+│   │   ├── core.py              # Main BBS logic + chunked send
+│   │   ├── scheduler.py         # Background task scheduler
+│   │   ├── rate_limiter.py      # Anti-spam rate limiting
+│   │   ├── mentions.py          # @mention notification system
+│   │   ├── privacy.py           # Privacy/GDPR utilities
+│   │   ├── commands/            # Command handlers
+│   │   │   ├── base.py          # Base command class
 │   │   │   ├── dispatcher.py
-│   │   │   ├── parser.py
-│   │   │   ├── help_cmd.py
-│   │   │   ├── post_cmd.py
-│   │   │   ├── list_cmd.py
-│   │   │   ├── read_cmd.py
-│   │   │   ├── areas_cmd.py
-│   │   │   └── nick_cmd.py
-│   │   ├── models/          # Database models
-│   │   │   ├── base.py
-│   │   │   ├── user.py
-│   │   │   ├── area.py
-│   │   │   ├── message.py
-│   │   │   ├── private_message.py
-│   │   │   └── activity_log.py
-│   │   └── repositories/    # Data access layer
-│   │       ├── base_repository.py
-│   │       ├── user_repository.py
-│   │       ├── area_repository.py
-│   │       └── message_repository.py
-│   ├── meshcore/            # MeshCore protocol
-│   │   ├── connection.py    # Radio connection
-│   │   ├── messages.py      # Message types
-│   │   └── protocol.py      # Protocol definitions
-│   └── utils/
-│       ├── config.py        # Configuration
-│       └── logger.py        # Logging setup
-├── data/                    # Database storage
-├── logs/                    # Log files
-├── tests/                   # Test suite
-├── tasks/                   # Development task docs
-└── docs/                    # Documentation
+│   │   │   ├── help_cmd.py, post_cmd.py, list_cmd.py, ...
+│   │   │   ├── admin_cmd.py     # Ban/mute/kick/promote
+│   │   │   ├── meteo_cmd.py     # Weather via Open-Meteo API
+│   │   │   └── news_cmd.py      # RSS feed reader
+│   │   ├── models/              # SQLAlchemy ORM models
+│   │   │   ├── user.py, message.py, area.py
+│   │   │   ├── private_message.py, activity_log.py
+│   │   │   └── delivery_status.py
+│   │   ├── repositories/        # Data access layer
+│   │   └── services/
+│   │       ├── delivery_tracker.py  # Message delivery state machine
+│   │       └── stats_collector.py   # Unified stats collection
+│   ├── meshcore/                # MeshCore protocol
+│   │   ├── connection.py        # Serial, BLE, TCP, Mock connections
+│   │   ├── messages.py          # Message types
+│   │   ├── protocol.py          # Protocol definitions
+│   │   └── state.py             # Connection state manager
+│   ├── utils/
+│   │   ├── config.py            # Configuration with persistence
+│   │   ├── logger.py            # Logging setup
+│   │   ├── mqtt.py              # MQTT client integration
+│   │   └── backup.py            # Database backup utilities
+│   └── web/                     # FastAPI web admin
+│       ├── main.py              # FastAPI app factory
+│       ├── api/v1/              # REST API endpoints
+│       │   ├── dashboard.py, users.py, areas.py, messages.py
+│       │   ├── settings.py, radio.py, logs.py, backups.py
+│       │   └── stats.py         # Unified statistics endpoint
+│       ├── auth/                # JWT + 2FA authentication
+│       ├── schemas/             # Pydantic response models
+│       └── websocket/           # Real-time updates
+├── web/                         # React frontend (Vite + Tailwind)
+├── tests/                       # 700+ test cases (pytest)
+├── deploy/                      # Systemd services + install scripts
+└── docs/                        # Documentation
 ```
 
 ## Architecture
@@ -336,6 +353,7 @@ SQLite with SQLAlchemy ORM (optional SQLCipher encryption). Tables:
 - `messages` - Public messages with threading support
 - `private_messages` - Direct messages between users
 - `activity_log` - System event log
+- `delivery_status` - Message delivery tracking (pending/sent/delivered/failed)
 
 Note: MeshCore provides E2E encryption for messages in transit. The BBS receives messages already decrypted by the companion radio. For additional protection, enable SQLCipher database encryption.
 
@@ -382,6 +400,7 @@ class MyCommand(BaseCommand):
 - [Installation Guide](docs/INSTALLATION.md) - Complete setup instructions
 - [Configuration Guide](docs/CONFIGURATION.md) - All configuration options
 - [API Documentation](docs/API.md) - REST API reference
+- [Plugin Guide](docs/PLUGINS.md) - Plugin development
 - [Changelog](CHANGELOG.md) - Version history
 
 ## License
