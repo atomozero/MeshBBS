@@ -16,6 +16,7 @@ from . import (  # noqa: F401
     news_cmd,
     nodes_cmd,
     ping_cmd,
+    trivia_cmd,
     post_cmd,
     read_cmd,
     areas_cmd,
