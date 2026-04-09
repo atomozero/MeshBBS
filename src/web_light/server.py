@@ -741,7 +741,7 @@ def api_send_advert():
     """Send a manual advertisement on the mesh network."""
     response.content_type = "application/json"
     try:
-        from launcher import get_bbs_instance, get_event_loop
+        from bbs.runtime import get_bbs_instance, get_event_loop
 
         bbs = get_bbs_instance()
         loop = get_event_loop()

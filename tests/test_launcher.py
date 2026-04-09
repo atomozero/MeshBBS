@@ -70,22 +70,22 @@ class TestBBSInstance:
 
     def test_initial_instance_is_none(self):
         """Verify no BBS instance exists initially."""
-        import launcher
-        launcher._bbs_instance = None
+        from bbs.runtime import set_bbs_instance
+        set_bbs_instance(None)
 
         assert get_bbs_instance() is None
 
     def test_get_bbs_instance_returns_set_value(self):
         """Verify get_bbs_instance returns the global instance."""
-        import launcher
+        from bbs.runtime import set_bbs_instance
 
         mock_bbs = MagicMock()
-        launcher._bbs_instance = mock_bbs
+        set_bbs_instance(mock_bbs)
 
         assert get_bbs_instance() is mock_bbs
 
         # Cleanup
-        launcher._bbs_instance = None
+        set_bbs_instance(None)
 
 
 class TestRunAll:

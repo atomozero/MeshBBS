@@ -30,19 +30,8 @@ from utils.logger import setup_logger, get_logger
 
 logger = None
 
-# Global reference to BBSCore and event loop for API control
-_bbs_instance = None
-_event_loop = None
-
-
-def get_bbs_instance():
-    """Get the running BBSCore instance (used by web API for control)."""
-    return _bbs_instance
-
-
-def get_event_loop():
-    """Get the main asyncio event loop (used by web thread for async calls)."""
-    return _event_loop
+# Re-export from bbs.runtime for backward compatibility
+from bbs.runtime import get_bbs_instance, get_event_loop
 
 
 def parse_args():
@@ -116,26 +105,26 @@ async def run_web_server(host: str, port: int, debug: bool):
 
 async def run_bbs(config: Config):
     """Run the BBS radio service."""
-    global _bbs_instance
-
     from bbs.core import BBSCore
+    from bbs.runtime import set_bbs_instance
 
     bbs = BBSCore(config)
-    _bbs_instance = bbs
+    set_bbs_instance(bbs)
 
     try:
         await bbs.start()
         await bbs.run()
     finally:
         await bbs.stop()
-        _bbs_instance = None
+        set_bbs_instance(None)
 
 
 async def run_all(args, config: Config):
     """Run BBS and web server concurrently."""
-    global logger, _event_loop
+    global logger
 
-    _event_loop = asyncio.get_running_loop()
+    from bbs.runtime import set_event_loop
+    set_event_loop(asyncio.get_running_loop())
 
     tasks = []
 

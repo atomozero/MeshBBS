@@ -32,7 +32,7 @@ class AdvertCommand(BaseCommand):
     ) -> CommandResult:
         """Send a flood advert on the mesh network."""
         try:
-            from launcher import get_bbs_instance
+            from bbs.runtime import get_bbs_instance
 
             bbs = get_bbs_instance()
             if bbs is None or not bbs._running:

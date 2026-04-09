@@ -35,7 +35,7 @@ async def get_bbs_status(
 
     # Check if BBS instance is running
     try:
-        from launcher import get_bbs_instance
+        from bbs.runtime import get_bbs_instance
         bbs = get_bbs_instance()
         bbs_running = bbs is not None and bbs._running
     except ImportError:
@@ -66,7 +66,7 @@ async def restart_bbs(
     and starts a new connection. Requires superadmin privileges.
     """
     try:
-        from launcher import get_bbs_instance
+        from bbs.runtime import get_bbs_instance
     except ImportError:
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
@@ -121,7 +121,7 @@ async def send_advert(
     Forces the BBS to announce its presence immediately.
     """
     try:
-        from launcher import get_bbs_instance
+        from bbs.runtime import get_bbs_instance
     except ImportError:
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
