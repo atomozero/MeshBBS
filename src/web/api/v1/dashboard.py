@@ -32,7 +32,7 @@ from bbs.models.area import Area
 from bbs.models.private_message import PrivateMessage
 from bbs.models.activity_log import ActivityLog, EventType
 from web import __version__ as web_version
-from meshcore.state import get_state_manager
+from meshbbs_radio.state import get_state_manager
 
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])

@@ -25,35 +25,6 @@ from pathlib import Path
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
 
-# Pre-load the pip meshcore library before our local meshcore package
-# shadows it. Save it as "meshcore_pip" in sys.modules so connection.py
-# can find it without name conflicts.
-try:
-    import importlib.util, site
-
-    _search_paths = site.getsitepackages() if hasattr(site, 'getsitepackages') else []
-    # Also add any site-packages from sys.path
-    for _p in sys.path:
-        if ('site-packages' in _p or 'dist-packages' in _p) and _p not in _search_paths:
-            _search_paths.append(_p)
-
-    for _sp in _search_paths:
-        _mc_init = os.path.join(_sp, 'meshcore', '__init__.py')
-        if os.path.exists(_mc_init):
-            _spec = importlib.util.spec_from_file_location(
-                "meshcore_pip", _mc_init,
-                submodule_search_locations=[os.path.join(_sp, 'meshcore')]
-            )
-            _mc = importlib.util.module_from_spec(_spec)
-            sys.modules["meshcore_pip"] = _mc
-            _spec.loader.exec_module(_mc)
-            break
-except Exception as _preload_err:
-    # Will be logged once logger is available
-    _preload_error = str(_preload_err)
-else:
-    _preload_error = None
-
 from utils.config import Config, set_config
 from utils.logger import setup_logger, get_logger
 
@@ -210,14 +181,6 @@ def main():
     logger.info("=" * 50)
     logger.info("MeshBBS v1.5.0 - Unified Launcher")
     logger.info("=" * 50)
-
-    # Report meshcore pre-load result
-    if "meshcore_pip" in sys.modules:
-        logger.info("meshcore library pre-loaded from site-packages")
-    elif _preload_error:
-        logger.warning(f"meshcore pre-load failed: {_preload_error}")
-    else:
-        logger.warning("meshcore library not found in site-packages")
 
     # Create BBS configuration
     # Put settings.json next to the database file

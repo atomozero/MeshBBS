@@ -13,7 +13,7 @@ from datetime import datetime
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from meshcore.state import (
+from meshbbs_radio.state import (
     MeshCoreStateManager,
     ConnectionStatus,
     ConnectionState,

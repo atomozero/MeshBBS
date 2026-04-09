@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from web.dependencies import get_current_admin
 from web.auth.models import AdminUser
-from meshcore.state import get_state_manager, ConnectionStatus
+from meshbbs_radio.state import get_state_manager, ConnectionStatus
 
 
 router = APIRouter(prefix="/radio", tags=["Radio"])

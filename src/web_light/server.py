@@ -419,7 +419,7 @@ def _get_stats():
 def _get_radio_status():
     """Get radio connection status."""
     try:
-        from meshcore.state import get_state_manager
+        from meshbbs_radio.state import get_state_manager
 
         sm = get_state_manager()
         state = sm.state

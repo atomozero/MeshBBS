@@ -9,8 +9,8 @@ from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 from bbs.core import BBSCore
-from meshcore.connection import MockMeshCoreConnection
-from meshcore.messages import Message
+from meshbbs_radio.connection import MockMeshCoreConnection
+from meshbbs_radio.messages import Message
 from utils.config import Config
 
 

@@ -19,48 +19,15 @@ import uuid
 from .messages import Message, Advert, Ack
 from .protocol import PacketType, NodeType
 
-# Try to import meshcore library (the pip package).
-# The pip library may be pre-loaded by the launcher as "meshcore_pip" in sys.modules,
-# or we load it directly from site-packages to avoid name conflict with this local package.
-MeshCore = None
-EventType = None
-MESHCORE_AVAILABLE = False
-
-
-def _resolve_meshcore():
-    """Find and load the pip meshcore library. Call before using MeshCore."""
-    global MeshCore, EventType, MESHCORE_AVAILABLE
-    if MESHCORE_AVAILABLE:
-        return
-
-    # Try 1: pre-loaded by launcher
-    if "meshcore_pip" in sys.modules:
-        _mc = sys.modules["meshcore_pip"]
-        MeshCore = getattr(_mc, 'MeshCore', None)
-        EventType = getattr(_mc, 'EventType', None)
-
-    # Try 2: load from site-packages directly
-    if MeshCore is None:
-        try:
-            import importlib.util
-            import site
-            for sp in (site.getsitepackages() if hasattr(site, 'getsitepackages') else []):
-                mc_init = os.path.join(sp, 'meshcore', '__init__.py')
-                if os.path.exists(mc_init):
-                    spec = importlib.util.spec_from_file_location(
-                        "meshcore_pip", mc_init,
-                        submodule_search_locations=[os.path.join(sp, 'meshcore')]
-                    )
-                    mod = importlib.util.module_from_spec(spec)
-                    sys.modules["meshcore_pip"] = mod
-                    spec.loader.exec_module(mod)
-                    MeshCore = getattr(mod, 'MeshCore', None)
-                    EventType = getattr(mod, 'EventType', None)
-                    break
-        except Exception:
-            pass
-
-    MESHCORE_AVAILABLE = MeshCore is not None
+# Import meshcore library (pip package).
+# No longer conflicts since we renamed our local package to "meshbbs_radio".
+try:
+    from meshcore import MeshCore, EventType
+    MESHCORE_AVAILABLE = True
+except ImportError:
+    MESHCORE_AVAILABLE = False
+    MeshCore = None
+    EventType = None
 
 # Handle import based on context (standalone vs package)
 try:
@@ -236,7 +203,6 @@ class MeshCoreConnection(BaseMeshCoreConnection):
         self._mock: Optional[MockMeshCoreConnection] = None
 
         # Resolve meshcore library (lazy load)
-        _resolve_meshcore()
 
         # Check if meshcore is available
         if not MESHCORE_AVAILABLE:
@@ -678,7 +644,6 @@ class BLEMeshCoreConnection(BaseMeshCoreConnection):
         self._mock: Optional[MockMeshCoreConnection] = None
 
         # Resolve meshcore library (lazy load)
-        _resolve_meshcore()
 
         # Check if meshcore is available
         if not MESHCORE_AVAILABLE:
@@ -1130,7 +1095,6 @@ class TCPMeshCoreConnection(BaseMeshCoreConnection):
         self._mock: Optional[MockMeshCoreConnection] = None
 
         # Resolve meshcore library (lazy load)
-        _resolve_meshcore()
 
         # Check if meshcore is available
         if not MESHCORE_AVAILABLE:

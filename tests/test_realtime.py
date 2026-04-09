@@ -125,7 +125,7 @@ class TestCoreWSIntegration:
     async def test_ws_notify_message(self, config, mock_connection):
         """Verify _ws_notify_message broadcasts to WebSocket."""
         from bbs.core import BBSCore
-        from meshcore.messages import Message
+        from meshbbs_radio.messages import Message
 
         bbs = BBSCore(config, connection=mock_connection)
 
@@ -152,7 +152,7 @@ class TestCoreWSIntegration:
     async def test_ws_notify_skipped_when_no_clients(self, config, mock_connection):
         """Verify notification is skipped when no WebSocket clients connected."""
         from bbs.core import BBSCore
-        from meshcore.messages import Message
+        from meshbbs_radio.messages import Message
 
         bbs = BBSCore(config, connection=mock_connection)
 

@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from web.dependencies import get_current_admin, get_current_superadmin
 from web.auth.models import AdminUser
-from meshcore.state import get_state_manager
+from meshbbs_radio.state import get_state_manager
 
 
 router = APIRouter(prefix="/bbs", tags=["BBS Control"])

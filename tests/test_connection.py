@@ -7,9 +7,9 @@ MIT License - Copyright (c) 2026 MeshBBS Contributors
 import pytest
 from datetime import datetime
 
-from meshcore.connection import MockMeshCoreConnection, Identity
-from meshcore.messages import Message, Advert
-from meshcore.protocol import NodeType, PacketType
+from meshbbs_radio.connection import MockMeshCoreConnection, Identity
+from meshbbs_radio.messages import Message, Advert
+from meshbbs_radio.protocol import NodeType, PacketType
 
 
 class TestIdentity:

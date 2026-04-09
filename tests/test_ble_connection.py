@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from meshcore.connection import (
+from meshbbs_radio.connection import (
     BLEMeshCoreConnection,
     MockMeshCoreConnection,
     Identity,

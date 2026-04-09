@@ -42,7 +42,7 @@ async def stats_health():
 
     Returns basic radio status without database queries.
     """
-    from meshcore.state import get_state_manager
+    from meshbbs_radio.state import get_state_manager
 
     state_manager = get_state_manager()
     state = state_manager.state

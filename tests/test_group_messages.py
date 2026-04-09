@@ -12,8 +12,8 @@ from datetime import datetime
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from meshcore.messages import Message, GroupMessage
-from meshcore.protocol import PacketType
+from meshbbs_radio.messages import Message, GroupMessage
+from meshbbs_radio.protocol import PacketType
 
 
 class TestMessageGroupFields:

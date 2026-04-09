@@ -22,7 +22,7 @@ if src_path not in sys.path:
 # Now we can import from src
 import bbs.models.base as db_base
 from bbs.models.area import Area
-from meshcore.connection import MockMeshCoreConnection
+from meshbbs_radio.connection import MockMeshCoreConnection
 from utils.config import Config, set_config
 from web.auth.models import AdminUser as AdminUserModel
 

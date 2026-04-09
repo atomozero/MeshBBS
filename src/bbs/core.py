@@ -11,9 +11,9 @@ from typing import Optional
 from bbs.models.base import get_session, init_database
 from bbs.models.activity_log import ActivityLog, EventType, log_activity
 from bbs.commands.dispatcher import CommandDispatcher
-from meshcore.connection import BaseMeshCoreConnection, MeshCoreConnection, TCPMeshCoreConnection
-from meshcore.messages import Message
-from meshcore.state import get_state_manager
+from meshbbs_radio.connection import BaseMeshCoreConnection, MeshCoreConnection, TCPMeshCoreConnection
+from meshbbs_radio.messages import Message
+from meshbbs_radio.state import get_state_manager
 from utils.config import Config, get_config
 
 try:

@@ -20,7 +20,7 @@ from bbs.models.message import Message
 from bbs.models.area import Area
 from bbs.models.private_message import PrivateMessage
 from bbs.models.activity_log import ActivityLog, EventType
-from meshcore.state import get_state_manager
+from meshbbs_radio.state import get_state_manager
 
 try:
     from utils.logger import get_logger
