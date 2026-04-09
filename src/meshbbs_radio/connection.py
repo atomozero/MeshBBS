@@ -1247,60 +1247,23 @@ class TCPMeshCoreConnection(BaseMeshCoreConnection):
             return False
 
         try:
-            # Get contacts to find the destination
-            result = await self._meshcore.commands.get_contacts()
+            # Find contact by public key prefix (like the old working code)
+            contact = self._meshcore.get_contact_by_key_prefix(destination[:12])
 
-            if result.type == EventType.ERROR:
-                logger.error(f"Error getting contacts: {result.payload}")
-                contact = destination
+            if contact:
+                # Send to resolved contact object
+                await self._meshcore.commands.send_msg(contact, text)
+                logger.info(f"SENT (contact) to={destination[:12]} len={len(text)}")
             else:
-                # Find contact by public key prefix
-                contact = self._meshcore.get_contact_by_key_prefix(destination[:12])
-                if not contact:
-                    contact = bytes.fromhex(destination) if len(destination) == 64 else destination
+                # Send directly using prefix string as fallback
+                await self._meshcore.commands.send_msg(destination, text)
+                logger.info(f"SENT (prefix) to={destination[:12]} len={len(text)}")
 
-            # Send message with retry and backoff for reliability
-            config = get_config() if get_config else None
-            max_attempts = config.max_send_attempts if config else 2
-            retry_delay = config.send_retry_delay if config else 2.0
-
-            send_result = await self._send_with_backoff(
-                contact, text, max_attempts, retry_delay,
-            )
-
-            if not send_result:
-                logger.error(f"Failed to send message to {destination[:8]}...")
-                return False
-
-            logger.debug(f"Message sent to {destination[:8]}...: {text[:30]}...")
             return True
 
         except Exception as e:
             logger.error(f"Error sending message via TCP: {e}")
             return False
-
-    async def _send_with_backoff(
-        self, contact, text: str, max_attempts: int, retry_delay: float,
-    ) -> bool:
-        """Send message with retry and backoff between attempts."""
-        for attempt in range(1, max_attempts + 1):
-            try:
-                send_result = await self._meshcore.commands.send_msg(contact, text)
-                if send_result.type != EventType.ERROR:
-                    return True
-            except Exception as e:
-                logger.warning(f"TCP send attempt {attempt}/{max_attempts} error: {e}")
-
-            if attempt < max_attempts:
-                delay = retry_delay * attempt
-                logger.warning(
-                    f"TCP send attempt {attempt}/{max_attempts} failed, "
-                    f"retrying in {delay}s..."
-                )
-                await asyncio.sleep(delay)
-
-        logger.error(f"All {max_attempts} TCP send attempts failed")
-        return False
 
     async def send_advert(self, flood: bool = False) -> bool:
         """
