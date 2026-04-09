@@ -182,6 +182,8 @@ def main():
     logger.info("=" * 50)
 
     # Create BBS configuration
+    # Put settings.json next to the database file
+    db_dir = str(Path(args.database).parent)
     config = Config(
         connection_mode="tcp" if args.tcp else "serial",
         serial_port=args.port,
@@ -189,6 +191,7 @@ def main():
         tcp_host=args.tcp_host,
         tcp_port=args.tcp_port,
         database_path=args.database,
+        config_file_path=str(Path(db_dir) / "settings.json"),
         log_path=args.log_file,
         log_level=log_level,
         bbs_name=args.name,
