@@ -145,7 +145,38 @@ def page(title, content, active=""):
 <div class="container">
 {content}
 </div>
-<div class="footer">MeshBBS Light &middot; {datetime.utcnow().strftime('%H:%M:%S UTC')}</div>
+<div class="footer">MeshBBS Light &middot; <span id="clock">{datetime.utcnow().strftime('%H:%M:%S UTC')}</span></div>
+<script>
+(function(){{
+  // Auto-refresh: fetch page content every 15s and replace #live-content
+  var lc = document.getElementById('live-content');
+  if (!lc) return;
+  var path = location.pathname === '/' ? '/api/partial/dashboard' :
+             location.pathname === '/messages' ? '/api/partial/messages' :
+             location.pathname === '/users' ? '/api/partial/users' :
+             location.pathname === '/logs' ? '/api/partial/logs' : null;
+  if (!path) return;
+
+  function tick() {{
+    var d = new Date();
+    var el = document.getElementById('clock');
+    if (el) el.textContent = d.toUTCString().slice(17, 25) + ' UTC';
+  }}
+  setInterval(tick, 1000);
+
+  function refresh() {{
+    fetch(path, {{credentials: 'same-origin'}})
+      .then(function(r) {{ if (r.ok) return r.text(); throw r; }})
+      .then(function(html) {{
+        lc.innerHTML = html;
+        var ind = document.getElementById('live-indicator');
+        if (ind) {{ ind.style.opacity = '1'; setTimeout(function(){{ ind.style.opacity = '0.5'; }}, 500); }}
+      }})
+      .catch(function() {{}});
+  }}
+  setInterval(refresh, 15000);
+}})();
+</script>
 </body>
 </html>"""
 
@@ -271,11 +302,162 @@ def dashboard():
     </div>
     """
 
+    live_content = _render_dashboard_content(stats, radio, cards, radio_info, activity_html)
+
     return page("Dashboard", f"""
-        <h1 style="margin:1rem 0">Dashboard</h1>
-        <span class="refresh-note">Aggiorna pagina per dati aggiornati</span>
-        {cards}{radio_info}{activity_html}
+        <h1 style="margin:1rem 0">Dashboard
+            <span id="live-indicator" class="badge badge-green" style="font-size:0.6rem;vertical-align:middle;opacity:0.5">LIVE</span>
+        </h1>
+        <div id="live-content">{live_content}</div>
     """, active="dashboard")
+
+
+def _render_dashboard_content(stats, radio, cards, radio_info, activity_html):
+    """Render the dashboard inner content (used by both full page and partial)."""
+    return f"{cards}{radio_info}{activity_html}"
+
+
+@app.route("/api/partial/dashboard")
+@require_auth
+def partial_dashboard():
+    """Return dashboard HTML fragment for live refresh."""
+    stats = _get_stats()
+    radio = _get_radio_status()
+
+    radio_badge = '<span class="badge badge-green">Connesso</span>' if radio["connected"] else '<span class="badge badge-red">Disconnesso</span>'
+
+    cards = f"""
+    <div class="grid">
+        <div class="card">
+            <h3>Utenti</h3>
+            <div class="value">{stats.get('users', {}).get('total', 0)}</div>
+            <div class="sub">{stats.get('users', {}).get('active_24h', 0)} attivi 24h</div>
+        </div>
+        <div class="card">
+            <h3>Messaggi oggi</h3>
+            <div class="value">{stats.get('messages', {}).get('public', {}).get('today', 0)}</div>
+            <div class="sub">{stats.get('messages', {}).get('public', {}).get('total', 0)} totali</div>
+        </div>
+        <div class="card">
+            <h3>PM</h3>
+            <div class="value">{stats.get('messages', {}).get('private', {}).get('today', 0)}</div>
+            <div class="sub">{stats.get('messages', {}).get('private', {}).get('unread', 0)} non letti</div>
+        </div>
+        <div class="card">
+            <h3>Radio</h3>
+            <div class="value">{radio_badge}</div>
+            <div class="sub">{radio.get('messages_processed', 0)} msg processati</div>
+        </div>
+    </div>
+    """
+
+    radio_info = ""
+    if radio["connected"]:
+        battery = radio.get("battery_level")
+        bat_str = f"{battery}%" if battery is not None else "N/A"
+        radio_info = f"""
+        <div class="section">
+        <h2>Stato Radio</h2>
+        <div class="card">
+            <table>
+            <tr><td>Nome</td><td>{radio.get('name', 'N/A')}</td></tr>
+            <tr><td>Porta</td><td>{radio.get('port', 'N/A')}</td></tr>
+            <tr><td>Batteria</td><td>{bat_str}</td></tr>
+            <tr><td>Uptime</td><td>{_format_uptime(radio.get('uptime_seconds', 0))}</td></tr>
+            <tr><td>Messaggi</td><td>{radio.get('messages_processed', 0)}</td></tr>
+            </table>
+        </div>
+        </div>
+        """
+
+    activity = _get_recent_activity(10)
+    act_rows = ""
+    for item in activity:
+        act_rows += f'<tr><td>{item["time"]}</td><td>{item["event"]}</td><td>{item["details"]}</td></tr>'
+
+    activity_html = f"""
+    <div class="section">
+    <h2>Attivita recente</h2>
+    <div class="card">
+        <table>
+        <tr><th>Ora</th><th>Evento</th><th>Dettagli</th></tr>
+        {act_rows if act_rows else '<tr><td colspan="3" style="text-align:center;color:#64748b">Nessuna attivita</td></tr>'}
+        </table>
+    </div>
+    </div>
+    """
+
+    return _render_dashboard_content(stats, radio, cards, radio_info, activity_html)
+
+
+# ---------------------------------------------------------------
+# Partial routes for other pages
+# ---------------------------------------------------------------
+
+@app.route("/api/partial/messages")
+@require_auth
+def partial_messages():
+    """Return messages table HTML fragment."""
+    messages = _get_recent_messages(25)
+    rows = ""
+    for msg in messages:
+        rows += f"""<tr>
+            <td>#{msg['id']}</td>
+            <td>{msg['author']}</td>
+            <td>{msg['area']}</td>
+            <td>{msg['body'][:60]}{'...' if len(msg['body']) > 60 else ''}</td>
+            <td>{msg['time']}</td>
+        </tr>"""
+    return f"""<table>
+    <tr><th>ID</th><th>Autore</th><th>Area</th><th>Messaggio</th><th>Data</th></tr>
+    {rows if rows else '<tr><td colspan="5" style="text-align:center;color:#64748b">Nessun messaggio</td></tr>'}
+    </table>"""
+
+
+@app.route("/api/partial/users")
+@require_auth
+def partial_users():
+    """Return users table HTML fragment."""
+    users = _get_users()
+    rows = ""
+    for u in users:
+        status = ""
+        if u.get("banned"):
+            status = '<span class="badge badge-red">Bannato</span>'
+        elif u.get("muted"):
+            status = '<span class="badge badge-yellow">Mutato</span>'
+        elif u.get("admin"):
+            status = '<span class="badge badge-green">Admin</span>'
+        rows += f"""<tr>
+            <td>{u['name']}</td>
+            <td><code>{u['key'][:12]}...</code></td>
+            <td>{status}</td>
+            <td>{u['messages']}</td>
+            <td>{u['last_seen']}</td>
+        </tr>"""
+    return f"""<table>
+    <tr><th>Nome</th><th>Chiave</th><th>Stato</th><th>Messaggi</th><th>Ultimo accesso</th></tr>
+    {rows if rows else '<tr><td colspan="5" style="text-align:center;color:#64748b">Nessun utente</td></tr>'}
+    </table>"""
+
+
+@app.route("/api/partial/logs")
+@require_auth
+def partial_logs():
+    """Return logs table HTML fragment."""
+    logs = _get_logs(50)
+    rows = ""
+    for log_entry in logs:
+        rows += f"""<tr>
+            <td>{log_entry['time']}</td>
+            <td>{log_entry['type']}</td>
+            <td>{log_entry.get('user', '')}</td>
+            <td>{log_entry.get('details', '')}</td>
+        </tr>"""
+    return f"""<table>
+    <tr><th>Data</th><th>Tipo</th><th>Utente</th><th>Dettagli</th></tr>
+    {rows if rows else '<tr><td colspan="4" style="text-align:center;color:#64748b">Nessun log</td></tr>'}
+    </table>"""
 
 
 # ---------------------------------------------------------------
@@ -298,13 +480,15 @@ def messages_page():
         </tr>"""
 
     return page("Messaggi", f"""
-        <h1 style="margin:1rem 0">Messaggi</h1>
-        <div class="card">
+        <h1 style="margin:1rem 0">Messaggi
+            <span id="live-indicator" class="badge badge-green" style="font-size:0.6rem;vertical-align:middle;opacity:0.5">LIVE</span>
+        </h1>
+        <div class="card"><div id="live-content">
         <table>
         <tr><th>ID</th><th>Autore</th><th>Area</th><th>Messaggio</th><th>Data</th></tr>
         {rows if rows else '<tr><td colspan="5" style="text-align:center;color:#64748b">Nessun messaggio</td></tr>'}
         </table>
-        </div>
+        </div></div>
     """, active="messages")
 
 
@@ -336,13 +520,15 @@ def users_page():
         </tr>"""
 
     return page("Utenti", f"""
-        <h1 style="margin:1rem 0">Utenti</h1>
-        <div class="card">
+        <h1 style="margin:1rem 0">Utenti
+            <span id="live-indicator" class="badge badge-green" style="font-size:0.6rem;vertical-align:middle;opacity:0.5">LIVE</span>
+        </h1>
+        <div class="card"><div id="live-content">
         <table>
         <tr><th>Nome</th><th>Chiave</th><th>Stato</th><th>Messaggi</th><th>Ultimo accesso</th></tr>
         {rows if rows else '<tr><td colspan="5" style="text-align:center;color:#64748b">Nessun utente</td></tr>'}
         </table>
-        </div>
+        </div></div>
     """, active="users")
 
 
@@ -365,13 +551,15 @@ def logs_page():
         </tr>"""
 
     return page("Log", f"""
-        <h1 style="margin:1rem 0">Log attivita</h1>
-        <div class="card">
+        <h1 style="margin:1rem 0">Log attivita
+            <span id="live-indicator" class="badge badge-green" style="font-size:0.6rem;vertical-align:middle;opacity:0.5">LIVE</span>
+        </h1>
+        <div class="card"><div id="live-content">
         <table>
         <tr><th>Data</th><th>Tipo</th><th>Utente</th><th>Dettagli</th></tr>
         {rows if rows else '<tr><td colspan="4" style="text-align:center;color:#64748b">Nessun log</td></tr>'}
         </table>
-        </div>
+        </div></div>
     """, active="logs")
 
 
