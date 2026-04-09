@@ -148,14 +148,14 @@ class CommandDispatcher:
         command = command_class(self.session)
         if command.admin_only and not user.is_admin:
             logger.warning(
-                f"Non-admin {sender_key[:8]} attempted admin command: /{parsed.command}"
+                f"Non-admin {sender_key[:8]} attempted admin command: !{parsed.command}"
             )
             return self._format_response("Permesso negato")
 
         # Execute command
         try:
             logger.info(
-                f"Executing /{parsed.command} from {ctx.sender_display}"
+                f"Executing !{parsed.command} from {ctx.sender_display}"
             )
             result = await command.execute(ctx, parsed.args)
 
@@ -184,5 +184,5 @@ class CommandDispatcher:
     def get_help_text(self) -> str:
         """Get help text listing all commands."""
         commands = CommandRegistry.get_public_commands()
-        cmd_names = sorted([f"/{cmd.name}" for cmd in commands])
+        cmd_names = sorted([f"!{cmd.name}" for cmd in commands])
         return f"{self.response_prefix} Comandi: {' '.join(cmd_names)}"

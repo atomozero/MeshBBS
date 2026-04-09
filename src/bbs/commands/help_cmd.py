@@ -34,23 +34,23 @@ class HelpCommand(BaseCommand):
         """
         if args:
             # Help for specific command
-            cmd_name = args[0].lower().lstrip("/")
+            cmd_name = args[0].lower().lstrip("!/")
             command_class = CommandRegistry.get(cmd_name)
 
             if command_class:
                 command = command_class(self.session)
                 return CommandResult.ok(
-                    f"[BBS] /{command.name}: {command.description}\n"
+                    f"[BBS] !{command.name}: {command.description}\n"
                     f"Uso: {command.usage}"
                 )
             else:
                 return CommandResult.fail(
-                    f"[BBS] Comando '/{cmd_name}' non trovato"
+                    f"[BBS] Comando '!{cmd_name}' non trovato"
                 )
 
         # List all commands
         commands = CommandRegistry.get_public_commands()
-        cmd_list = " ".join(sorted([f"/{cmd.name}" for cmd in commands]))
+        cmd_list = " ".join(sorted([f"!{cmd.name}" for cmd in commands]))
 
         return CommandResult.ok(
             f"[BBS] Comandi: {cmd_list}\n"

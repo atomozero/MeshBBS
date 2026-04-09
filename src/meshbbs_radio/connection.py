@@ -396,20 +396,19 @@ class MeshCoreConnection(BaseMeshCoreConnection):
     async def _send_with_backoff(
         self, contact, text: str, max_attempts: int, retry_delay: float,
     ) -> bool:
-        """Send message with retry and exponential backoff between attempts."""
+        """Send message with retry and backoff between attempts."""
         for attempt in range(1, max_attempts + 1):
-            send_result = await self._meshcore.commands.send_msg_with_retry(
-                contact,
-                text,
-                max_attempts=1,  # single attempt per round, we handle retry ourselves
-                timeout=10,
-            )
+            try:
+                # Use simple send_msg first (faster, no ACK wait)
+                send_result = await self._meshcore.commands.send_msg(contact, text)
 
-            if send_result.type != EventType.ERROR:
-                return True
+                if send_result.type != EventType.ERROR:
+                    return True
+            except Exception as e:
+                logger.warning(f"Send attempt {attempt}/{max_attempts} error: {e}")
 
             if attempt < max_attempts:
-                delay = retry_delay * attempt  # linear backoff: 2s, 4s, ...
+                delay = retry_delay * attempt
                 logger.warning(
                     f"Send attempt {attempt}/{max_attempts} failed, "
                     f"retrying in {delay}s..."
@@ -847,17 +846,14 @@ class BLEMeshCoreConnection(BaseMeshCoreConnection):
     async def _send_with_backoff(
         self, contact, text: str, max_attempts: int, retry_delay: float,
     ) -> bool:
-        """Send message with retry and exponential backoff between attempts."""
+        """Send message with retry and backoff between attempts."""
         for attempt in range(1, max_attempts + 1):
-            send_result = await self._meshcore.commands.send_msg_with_retry(
-                contact,
-                text,
-                max_attempts=1,
-                timeout=10,
-            )
-
-            if send_result.type != EventType.ERROR:
-                return True
+            try:
+                send_result = await self._meshcore.commands.send_msg(contact, text)
+                if send_result.type != EventType.ERROR:
+                    return True
+            except Exception as e:
+                logger.warning(f"BLE send attempt {attempt}/{max_attempts} error: {e}")
 
             if attempt < max_attempts:
                 delay = retry_delay * attempt
@@ -1286,17 +1282,14 @@ class TCPMeshCoreConnection(BaseMeshCoreConnection):
     async def _send_with_backoff(
         self, contact, text: str, max_attempts: int, retry_delay: float,
     ) -> bool:
-        """Send message with retry and exponential backoff between attempts."""
+        """Send message with retry and backoff between attempts."""
         for attempt in range(1, max_attempts + 1):
-            send_result = await self._meshcore.commands.send_msg_with_retry(
-                contact,
-                text,
-                max_attempts=1,
-                timeout=10,
-            )
-
-            if send_result.type != EventType.ERROR:
-                return True
+            try:
+                send_result = await self._meshcore.commands.send_msg(contact, text)
+                if send_result.type != EventType.ERROR:
+                    return True
+            except Exception as e:
+                logger.warning(f"TCP send attempt {attempt}/{max_attempts} error: {e}")
 
             if attempt < max_attempts:
                 delay = retry_delay * attempt

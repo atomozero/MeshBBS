@@ -36,7 +36,7 @@ class TestHelpCommand:
 
         assert response is not None
         assert "post" in response.lower()
-        assert "usage" in response.lower() or "/" in response
+        assert "uso" in response.lower() or "!" in response
 
 
 class TestAreasCommand:
