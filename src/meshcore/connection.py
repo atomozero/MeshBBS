@@ -8,6 +8,8 @@ It includes both a real implementation using meshcore_py and a mock for testing.
 """
 
 import asyncio
+import os
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
