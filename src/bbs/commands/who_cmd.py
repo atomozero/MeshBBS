@@ -21,7 +21,7 @@ class WhoCommand(BaseCommand):
 
     name = "who"
     description = "Mostra utenti attivi"
-    usage = "/who [ore]"
+    usage = "!who [ore]"
     aliases = ["users", "online"]
 
     # Default hours to look back
@@ -59,7 +59,7 @@ class WhoCommand(BaseCommand):
                     hours = self.MAX_HOURS
             except ValueError:
                 return CommandResult.fail(
-                    "[BBS] Uso: /who [ore]\nEsempio: /who 12"
+                    "[BBS] Uso: !who [ore]\nEsempio: !who 12"
                 )
 
         # Get active users

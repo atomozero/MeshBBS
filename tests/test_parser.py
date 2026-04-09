@@ -13,7 +13,7 @@ class TestParseCommand:
 
     def test_parse_simple_command(self):
         """Test parsing a simple command without arguments."""
-        result = parse_command("/help")
+        result = parse_command("!help")
         assert result is not None
         assert result.command == "help"
         assert result.raw_args == ""
@@ -21,7 +21,7 @@ class TestParseCommand:
 
     def test_parse_command_with_args(self):
         """Test parsing a command with arguments."""
-        result = parse_command("/post general Hello world!")
+        result = parse_command("!post general Hello world!")
         assert result is not None
         assert result.command == "post"
         assert result.raw_args == "general Hello world!"
@@ -30,7 +30,7 @@ class TestParseCommand:
 
     def test_parse_command_with_whitespace(self):
         """Test parsing a command with extra whitespace."""
-        result = parse_command("  /list   general  ")
+        result = parse_command("  !list   general  ")
         assert result is not None
         assert result.command == "list"
         assert "general" in result.raw_args
@@ -52,13 +52,13 @@ class TestParseCommand:
 
     def test_parse_command_case_insensitive(self):
         """Test that command parsing is case-insensitive."""
-        result = parse_command("/HELP")
+        result = parse_command("!HELP")
         assert result is not None
         assert result.command == "help"
 
     def test_parse_command_with_numbers(self):
         """Test parsing a command with numeric arguments."""
-        result = parse_command("/read 123")
+        result = parse_command("!read 123")
         assert result is not None
         assert result.command == "read"
         assert result.raw_args == "123"
@@ -66,7 +66,7 @@ class TestParseCommand:
 
     def test_parse_command_multiline(self):
         """Test parsing command with multiline content."""
-        result = parse_command("/post general Line 1\nLine 2\nLine 3")
+        result = parse_command("!post general Line 1\nLine 2\nLine 3")
         assert result is not None
         assert result.command == "post"
         # Parser takes full message, command handles multiline
@@ -74,15 +74,15 @@ class TestParseCommand:
 
     def test_parsed_command_has_args(self):
         """Test ParsedCommand.has_args property."""
-        with_args = parse_command("/post hello")
-        without_args = parse_command("/help")
+        with_args = parse_command("!post hello")
+        without_args = parse_command("!help")
 
         assert with_args.has_args is True
         assert without_args.has_args is False
 
     def test_parsed_command_get_arg(self):
         """Test ParsedCommand.get_arg method."""
-        result = parse_command("/post area message text")
+        result = parse_command("!post area message text")
         assert result.get_arg(0) == "area"
         assert result.get_arg(1) == "message"
         assert result.get_arg(99, "default") == "default"

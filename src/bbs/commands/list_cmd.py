@@ -19,7 +19,7 @@ class ListCommand(BaseCommand):
 
     name = "list"
     description = "Lista ultimi messaggi"
-    usage = "/list [n]"
+    usage = "!list [n]"
     aliases = ["l", "ls"]
 
     MAX_LIMIT = 10
@@ -46,7 +46,7 @@ class ListCommand(BaseCommand):
                 limit = max(1, min(limit, self.MAX_LIMIT))
             except ValueError:
                 return CommandResult.fail(
-                    "[BBS] Uso: /list [numero]\nEsempio: /list 5"
+                    "[BBS] Uso: !list [numero]\nEsempio: !list 5"
                 )
 
         # Get recent messages

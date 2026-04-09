@@ -20,7 +20,7 @@ class ReadPmCommand(BaseCommand):
 
     name = "readpm"
     description = "Leggi un messaggio privato"
-    usage = "/readpm <id>"
+    usage = "!readpm <id>"
     aliases = ["rpm", "viewpm"]
 
     def __init__(self, session: Session):
@@ -43,7 +43,7 @@ class ReadPmCommand(BaseCommand):
         # Check arguments
         if not args:
             return CommandResult.fail(
-                "[BBS] Uso: /readpm <id>"
+                "[BBS] Uso: !readpm <id>"
             )
 
         # Parse message ID
@@ -90,6 +90,6 @@ class ReadPmCommand(BaseCommand):
         # Add reply hint if user is recipient
         if message.recipient_key == ctx.sender_key:
             lines.append("")
-            lines.append(f"Rispondi: /msg {other_name} <testo>")
+            lines.append(f"Rispondi: !msg {other_name} <testo>")
 
         return CommandResult.ok("\n".join(lines))

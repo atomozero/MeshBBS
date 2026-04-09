@@ -18,7 +18,7 @@ class TestPromoteCommand:
     async def test_promote_no_args(self, db_session: Session, admin_sender_key: str):
         """Test /promote without arguments shows usage."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/promote", admin_sender_key)
+        response = await dispatcher.dispatch("!promote", admin_sender_key)
 
         assert response is not None
         assert "uso" in response.lower()
@@ -33,7 +33,7 @@ class TestPromoteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/promote Target", test_sender_key)
+        response = await dispatcher.dispatch("!promote Target", test_sender_key)
 
         assert response is not None
         assert "permesso negato" in response.lower()
@@ -44,7 +44,7 @@ class TestPromoteCommand:
     ):
         """Test /promote with non-existent user."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/promote NonExistent", admin_sender_key)
+        response = await dispatcher.dispatch("!promote NonExistent", admin_sender_key)
 
         assert response is not None
         assert "non trovato" in response.lower()
@@ -59,7 +59,7 @@ class TestPromoteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/promote NewMod", admin_sender_key)
+        response = await dispatcher.dispatch("!promote NewMod", admin_sender_key)
 
         assert response is not None
         assert "moderatore" in response.lower()
@@ -78,7 +78,7 @@ class TestPromoteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/promote NewAdmin admin", admin_sender_key)
+        response = await dispatcher.dispatch("!promote NewAdmin admin", admin_sender_key)
 
         assert response is not None
         assert "admin" in response.lower()
@@ -93,7 +93,7 @@ class TestPromoteCommand:
     ):
         """Test admin cannot promote themselves."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch(f"/promote {admin_sender_key[:8]}", admin_sender_key)
+        response = await dispatcher.dispatch(f"!promote {admin_sender_key[:8]}", admin_sender_key)
 
         assert response is not None
         assert "te stesso" in response.lower()
@@ -108,7 +108,7 @@ class TestPromoteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/promote ExistingMod", admin_sender_key)
+        response = await dispatcher.dispatch("!promote ExistingMod", admin_sender_key)
 
         assert response is not None
         assert "già moderatore" in response.lower()
@@ -123,7 +123,7 @@ class TestPromoteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/promote ExistingAdmin admin", admin_sender_key)
+        response = await dispatcher.dispatch("!promote ExistingAdmin admin", admin_sender_key)
 
         assert response is not None
         assert "già admin" in response.lower()
@@ -138,7 +138,7 @@ class TestPromoteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/promote Admin2", admin_sender_key)
+        response = await dispatcher.dispatch("!promote Admin2", admin_sender_key)
 
         assert response is not None
         assert "già admin" in response.lower()
@@ -153,7 +153,7 @@ class TestPromoteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/promote Banned", admin_sender_key)
+        response = await dispatcher.dispatch("!promote Banned", admin_sender_key)
 
         assert response is not None
         assert "bannato" in response.lower()
@@ -168,7 +168,7 @@ class TestPromoteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/promote ModToAdmin admin", admin_sender_key)
+        response = await dispatcher.dispatch("!promote ModToAdmin admin", admin_sender_key)
 
         assert response is not None
         assert "admin" in response.lower()
@@ -184,7 +184,7 @@ class TestDemoteCommand:
     async def test_demote_no_args(self, db_session: Session, admin_sender_key: str):
         """Test /demote without arguments shows usage."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/demote", admin_sender_key)
+        response = await dispatcher.dispatch("!demote", admin_sender_key)
 
         assert response is not None
         assert "uso" in response.lower()
@@ -199,7 +199,7 @@ class TestDemoteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/demote Mod", test_sender_key)
+        response = await dispatcher.dispatch("!demote Mod", test_sender_key)
 
         assert response is not None
         assert "permesso negato" in response.lower()
@@ -214,7 +214,7 @@ class TestDemoteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/demote ExMod", admin_sender_key)
+        response = await dispatcher.dispatch("!demote ExMod", admin_sender_key)
 
         assert response is not None
         assert "utente" in response.lower()
@@ -233,7 +233,7 @@ class TestDemoteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/demote ExAdmin", admin_sender_key)
+        response = await dispatcher.dispatch("!demote ExAdmin", admin_sender_key)
 
         assert response is not None
         assert "moderatore" in response.lower()
@@ -248,7 +248,7 @@ class TestDemoteCommand:
     ):
         """Test admin cannot demote themselves."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch(f"/demote {admin_sender_key[:8]}", admin_sender_key)
+        response = await dispatcher.dispatch(f"!demote {admin_sender_key[:8]}", admin_sender_key)
 
         assert response is not None
         assert "te stesso" in response.lower()
@@ -263,7 +263,7 @@ class TestDemoteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/demote Regular", admin_sender_key)
+        response = await dispatcher.dispatch("!demote Regular", admin_sender_key)
 
         assert response is not None
         assert "già un utente normale" in response.lower()
@@ -274,7 +274,7 @@ class TestDemoteCommand:
     ):
         """Test /demote with non-existent user."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/demote NonExistent", admin_sender_key)
+        response = await dispatcher.dispatch("!demote NonExistent", admin_sender_key)
 
         assert response is not None
         assert "non trovato" in response.lower()
@@ -288,7 +288,7 @@ class TestStaffCommand:
         """Test /staff with no staff configured."""
         # Clear admin from fixture by creating a fresh user
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/staff", test_sender_key)
+        response = await dispatcher.dispatch("!staff", test_sender_key)
 
         assert response is not None
         # Either shows no staff or shows the admin from fixture
@@ -300,7 +300,7 @@ class TestStaffCommand:
     ):
         """Test /staff shows admin users."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/staff", test_sender_key)
+        response = await dispatcher.dispatch("!staff", test_sender_key)
 
         assert response is not None
         assert "[a]" in response.lower()
@@ -316,7 +316,7 @@ class TestStaffCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/staff", test_sender_key)
+        response = await dispatcher.dispatch("!staff", test_sender_key)
 
         assert response is not None
         assert "[m]" in response.lower()
@@ -332,7 +332,7 @@ class TestStaffCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/staff", test_sender_key)
+        response = await dispatcher.dispatch("!staff", test_sender_key)
 
         assert response is not None
         assert "[a]" in response.lower()
@@ -369,7 +369,7 @@ class TestStaffCommand:
         """Test /staff is available to non-admin users."""
         # Regular user should be able to use /staff
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/staff", test_sender_key)
+        response = await dispatcher.dispatch("!staff", test_sender_key)
 
         assert response is not None
         # Should not be "permesso negato"
@@ -415,7 +415,7 @@ class TestPromoteDemoteWorkflow:
         dispatcher = CommandDispatcher(session=db_session)
 
         # Promote to moderator
-        response = await dispatcher.dispatch("/promote Rising", admin_sender_key)
+        response = await dispatcher.dispatch("!promote Rising", admin_sender_key)
         assert "moderatore" in response.lower()
 
         db_session.refresh(target)
@@ -423,7 +423,7 @@ class TestPromoteDemoteWorkflow:
         assert target.is_admin is False
 
         # Promote to admin
-        response = await dispatcher.dispatch("/promote Rising admin", admin_sender_key)
+        response = await dispatcher.dispatch("!promote Rising admin", admin_sender_key)
         assert "admin" in response.lower()
 
         db_session.refresh(target)
@@ -441,7 +441,7 @@ class TestPromoteDemoteWorkflow:
         dispatcher = CommandDispatcher(session=db_session)
 
         # Demote from admin to moderator
-        response = await dispatcher.dispatch("/demote Falling", admin_sender_key)
+        response = await dispatcher.dispatch("!demote Falling", admin_sender_key)
         assert "moderatore" in response.lower()
 
         db_session.refresh(target)
@@ -449,7 +449,7 @@ class TestPromoteDemoteWorkflow:
         assert target.is_moderator is True
 
         # Demote from moderator to user
-        response = await dispatcher.dispatch("/demote Falling", admin_sender_key)
+        response = await dispatcher.dispatch("!demote Falling", admin_sender_key)
         assert "utente" in response.lower()
 
         db_session.refresh(target)

@@ -22,7 +22,7 @@ class PostCommand(BaseCommand):
 
     name = "post"
     description = "Pubblica un messaggio"
-    usage = "/post [#area] <messaggio>"
+    usage = "!post [#area] <messaggio>"
     aliases = ["p", "say"]
 
     def __init__(self, session: Session):
@@ -46,9 +46,9 @@ class PostCommand(BaseCommand):
         # Check for message content
         if not args:
             return CommandResult.fail(
-                "[BBS] Uso: /post [#area] <messaggio>\n"
-                "Esempio: /post Ciao!\n"
-                "Esempio: /post #tech Domanda tecnica"
+                "[BBS] Uso: !post [#area] <messaggio>\n"
+                "Esempio: !post Ciao!\n"
+                "Esempio: !post #tech Domanda tecnica"
             )
 
         # Parse area and message
@@ -57,7 +57,7 @@ class PostCommand(BaseCommand):
         # Check if we have a message
         if not text:
             return CommandResult.fail(
-                "[BBS] Uso: /post [#area] <messaggio>"
+                "[BBS] Uso: !post [#area] <messaggio>"
             )
 
         # Validate length

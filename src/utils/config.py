@@ -44,10 +44,17 @@ UPDATABLE_FIELDS = {
 class Config:
     """Application configuration with sensible defaults."""
 
+    # Connection mode: "serial" or "tcp"
+    connection_mode: str = "serial"
+
     # Serial connection
     serial_port: str = "/dev/ttyUSB0"
     baud_rate: int = 115200
     serial_timeout: float = 1.0
+
+    # TCP connection
+    tcp_host: str = "192.168.1.100"
+    tcp_port: int = 5000
 
     # Database
     database_path: str = "data/bbs.db"

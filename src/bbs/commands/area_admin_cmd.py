@@ -21,7 +21,7 @@ class NewAreaCommand(BaseCommand):
 
     name = "newarea"
     description = "Crea una nuova area"
-    usage = "/newarea <nome> [descrizione]"
+    usage = "!newarea <nome> [descrizione]"
     aliases = ["createarea", "addarea"]
     admin_only = True
 
@@ -49,8 +49,8 @@ class NewAreaCommand(BaseCommand):
         """
         if not args:
             return CommandResult.fail(
-                "[BBS] Uso: /newarea <nome> [descrizione]\n"
-                "Esempio: /newarea gaming Discussioni sui videogiochi\n"
+                "[BBS] Uso: !newarea <nome> [descrizione]\n"
+                "Esempio: !newarea gaming Discussioni sui videogiochi\n"
                 f"Nome: {self.MIN_NAME_LENGTH}-{self.MAX_NAME_LENGTH} caratteri, lettere/numeri"
             )
 
@@ -102,7 +102,7 @@ class DelAreaCommand(BaseCommand):
 
     name = "delarea"
     description = "Elimina un'area"
-    usage = "/delarea <nome>"
+    usage = "!delarea <nome>"
     aliases = ["deletearea", "rmarea"]
     admin_only = True
 
@@ -128,8 +128,8 @@ class DelAreaCommand(BaseCommand):
         """
         if not args:
             return CommandResult.fail(
-                "[BBS] Uso: /delarea <nome>\n"
-                "Esempio: /delarea test\n"
+                "[BBS] Uso: !delarea <nome>\n"
+                "Esempio: !delarea test\n"
                 "ATTENZIONE: Elimina anche tutti i messaggi!"
             )
 
@@ -171,7 +171,7 @@ class EditAreaCommand(BaseCommand):
 
     name = "editarea"
     description = "Modifica un'area"
-    usage = "/editarea <nome> <proprietà> <valore>"
+    usage = "!editarea <nome> <proprietà> <valore>"
     aliases = ["modarea"]
     admin_only = True
 
@@ -194,12 +194,12 @@ class EditAreaCommand(BaseCommand):
         """
         if len(args) < 2:
             return CommandResult.fail(
-                "[BBS] Uso: /editarea <nome> <proprietà> [valore]\n"
+                "[BBS] Uso: !editarea <nome> <proprietà> [valore]\n"
                 "Proprietà:\n"
                 "  desc <testo> - Cambia descrizione\n"
                 "  readonly on/off - Imposta sola lettura\n"
                 "  public on/off - Imposta visibilità\n"
-                "Esempio: /editarea tech desc Area per discussioni tecniche"
+                "Esempio: !editarea tech desc Area per discussioni tecniche"
             )
 
         area_name = args[0].lower().lstrip("#")
@@ -234,7 +234,7 @@ class EditAreaCommand(BaseCommand):
         elif prop in ["readonly", "ro", "sololettura"]:
             if value is None or value.lower() not in ["on", "off", "true", "false", "1", "0"]:
                 return CommandResult.fail(
-                    "[BBS] Usa: /editarea <nome> readonly on/off"
+                    "[BBS] Usa: !editarea <nome> readonly on/off"
                 )
 
             new_readonly = value.lower() in ["on", "true", "1"]
@@ -254,7 +254,7 @@ class EditAreaCommand(BaseCommand):
         elif prop in ["public", "pubblica", "visibile"]:
             if value is None or value.lower() not in ["on", "off", "true", "false", "1", "0"]:
                 return CommandResult.fail(
-                    "[BBS] Usa: /editarea <nome> public on/off"
+                    "[BBS] Usa: !editarea <nome> public on/off"
                 )
 
             new_public = value.lower() in ["on", "true", "1"]
@@ -284,7 +284,7 @@ class ListAreasAdminCommand(BaseCommand):
 
     name = "listareas"
     description = "Lista tutte le aree (admin)"
-    usage = "/listareas"
+    usage = "!listareas"
     aliases = []
     admin_only = True
 

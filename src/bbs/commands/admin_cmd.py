@@ -20,7 +20,7 @@ class BanCommand(BaseCommand):
 
     name = "ban"
     description = "Banna un utente"
-    usage = "/ban <utente> [motivo]"
+    usage = "!ban <utente> [motivo]"
     aliases = []
     admin_only = True
 
@@ -43,9 +43,9 @@ class BanCommand(BaseCommand):
         """
         if not args:
             return CommandResult.fail(
-                "[BBS] Uso: /ban <utente> [motivo]\n"
-                "Esempio: /ban Mario spam\n"
-                "Esempio: /ban abc12345 comportamento scorretto"
+                "[BBS] Uso: !ban <utente> [motivo]\n"
+                "Esempio: !ban Mario spam\n"
+                "Esempio: !ban abc12345 comportamento scorretto"
             )
 
         user_identifier = args[0]
@@ -89,7 +89,7 @@ class UnbanCommand(BaseCommand):
 
     name = "unban"
     description = "Rimuove il ban da un utente"
-    usage = "/unban <utente>"
+    usage = "!unban <utente>"
     aliases = []
     admin_only = True
 
@@ -112,8 +112,8 @@ class UnbanCommand(BaseCommand):
         """
         if not args:
             return CommandResult.fail(
-                "[BBS] Uso: /unban <utente>\n"
-                "Esempio: /unban Mario"
+                "[BBS] Uso: !unban <utente>\n"
+                "Esempio: !unban Mario"
             )
 
         user_identifier = args[0]
@@ -147,7 +147,7 @@ class MuteCommand(BaseCommand):
 
     name = "mute"
     description = "Silenzia un utente"
-    usage = "/mute <utente> [motivo]"
+    usage = "!mute <utente> [motivo]"
     aliases = ["silence"]
     admin_only = True
 
@@ -170,8 +170,8 @@ class MuteCommand(BaseCommand):
         """
         if not args:
             return CommandResult.fail(
-                "[BBS] Uso: /mute <utente> [motivo]\n"
-                "Esempio: /mute Mario off-topic\n"
+                "[BBS] Uso: !mute <utente> [motivo]\n"
+                "Esempio: !mute Mario off-topic\n"
                 "L'utente potrà leggere ma non scrivere"
             )
 
@@ -222,7 +222,7 @@ class UnmuteCommand(BaseCommand):
 
     name = "unmute"
     description = "Rimuove il silenziamento da un utente"
-    usage = "/unmute <utente>"
+    usage = "!unmute <utente>"
     aliases = ["unsilence"]
     admin_only = True
 
@@ -245,8 +245,8 @@ class UnmuteCommand(BaseCommand):
         """
         if not args:
             return CommandResult.fail(
-                "[BBS] Uso: /unmute <utente>\n"
-                "Esempio: /unmute Mario"
+                "[BBS] Uso: !unmute <utente>\n"
+                "Esempio: !unmute Mario"
             )
 
         user_identifier = args[0]
@@ -280,7 +280,7 @@ class PromoteCommand(BaseCommand):
 
     name = "promote"
     description = "Promuovi un utente a moderatore o admin"
-    usage = "/promote <utente> [admin]"
+    usage = "!promote <utente> [admin]"
     aliases = []
     admin_only = True
 
@@ -303,9 +303,9 @@ class PromoteCommand(BaseCommand):
         """
         if not args:
             return CommandResult.fail(
-                "[BBS] Uso: /promote <utente> [admin]\n"
-                "Esempio: /promote Mario - promuove a moderatore\n"
-                "Esempio: /promote Mario admin - promuove ad admin"
+                "[BBS] Uso: !promote <utente> [admin]\n"
+                "Esempio: !promote Mario - promuove a moderatore\n"
+                "Esempio: !promote Mario admin - promuove ad admin"
             )
 
         user_identifier = args[0]
@@ -368,7 +368,7 @@ class DemoteCommand(BaseCommand):
 
     name = "demote"
     description = "Rimuovi ruolo moderatore o admin"
-    usage = "/demote <utente>"
+    usage = "!demote <utente>"
     aliases = []
     admin_only = True
 
@@ -391,8 +391,8 @@ class DemoteCommand(BaseCommand):
         """
         if not args:
             return CommandResult.fail(
-                "[BBS] Uso: /demote <utente>\n"
-                "Esempio: /demote Mario\n"
+                "[BBS] Uso: !demote <utente>\n"
+                "Esempio: !demote Mario\n"
                 "Admin diventa moderatore, moderatore diventa utente"
             )
 
@@ -442,7 +442,7 @@ class StaffCommand(BaseCommand):
 
     name = "staff"
     description = "Mostra lo staff del BBS"
-    usage = "/staff"
+    usage = "!staff"
     aliases = ["mods", "admins"]
     admin_only = False  # Everyone can see staff
 
@@ -490,7 +490,7 @@ class KickCommand(BaseCommand):
 
     name = "kick"
     description = "Espelli temporaneamente un utente"
-    usage = "/kick <utente> <minuti> [motivo]"
+    usage = "!kick <utente> <minuti> [motivo]"
     aliases = []
     admin_only = True
 
@@ -516,9 +516,9 @@ class KickCommand(BaseCommand):
         """
         if not args:
             return CommandResult.fail(
-                "[BBS] Uso: /kick <utente> [minuti] [motivo]\n"
+                "[BBS] Uso: !kick <utente> [minuti] [motivo]\n"
                 f"Default: {self.DEFAULT_MINUTES} minuti, max: {self.MAX_MINUTES}\n"
-                "Esempio: /kick Mario 60 spam"
+                "Esempio: !kick Mario 60 spam"
             )
 
         user_identifier = args[0]
@@ -578,7 +578,7 @@ class UnkickCommand(BaseCommand):
 
     name = "unkick"
     description = "Rimuove l'espulsione da un utente"
-    usage = "/unkick <utente>"
+    usage = "!unkick <utente>"
     aliases = []
     admin_only = True
 
@@ -601,8 +601,8 @@ class UnkickCommand(BaseCommand):
         """
         if not args:
             return CommandResult.fail(
-                "[BBS] Uso: /unkick <utente>\n"
-                "Esempio: /unkick Mario"
+                "[BBS] Uso: !unkick <utente>\n"
+                "Esempio: !unkick Mario"
             )
 
         user_identifier = args[0]

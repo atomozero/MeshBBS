@@ -20,7 +20,7 @@ class TestWhoCommand:
     async def test_who_no_users(self, db_session: Session, test_sender_key: str):
         """Test /who with no other active users."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/who", test_sender_key)
+        response = await dispatcher.dispatch("!who", test_sender_key)
 
         assert response is not None
         # The calling user will be created, so they will be active
@@ -30,7 +30,7 @@ class TestWhoCommand:
     async def test_who_shows_active_user(self, db_session: Session, test_sender_key: str):
         """Test /who shows the current user as active."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/who", test_sender_key)
+        response = await dispatcher.dispatch("!who", test_sender_key)
 
         assert response is not None
         assert "[BBS]" in response
@@ -44,13 +44,13 @@ class TestWhoCommand:
         """Test /who shows multiple active users."""
         # Create first user by calling a command
         dispatcher = CommandDispatcher(session=db_session)
-        await dispatcher.dispatch("/help", test_sender_key)
+        await dispatcher.dispatch("!help", test_sender_key)
 
         # Create second user
-        await dispatcher.dispatch("/help", test_sender_key_2)
+        await dispatcher.dispatch("!help", test_sender_key_2)
 
         # Now check /who
-        response = await dispatcher.dispatch("/who", test_sender_key)
+        response = await dispatcher.dispatch("!who", test_sender_key)
 
         assert response is not None
         # Should show at least 2 users
@@ -62,10 +62,10 @@ class TestWhoCommand:
         dispatcher = CommandDispatcher(session=db_session)
 
         # Set nickname first
-        await dispatcher.dispatch("/nick Mario", test_sender_key)
+        await dispatcher.dispatch("!nick Mario", test_sender_key)
 
         # Check /who
-        response = await dispatcher.dispatch("/who", test_sender_key)
+        response = await dispatcher.dispatch("!who", test_sender_key)
 
         assert response is not None
         assert "Mario" in response
@@ -74,7 +74,7 @@ class TestWhoCommand:
     async def test_who_with_hours_argument(self, db_session: Session, test_sender_key: str):
         """Test /who with custom hours argument."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/who 12", test_sender_key)
+        response = await dispatcher.dispatch("!who 12", test_sender_key)
 
         assert response is not None
         assert "12h" in response
@@ -83,16 +83,16 @@ class TestWhoCommand:
     async def test_who_invalid_hours(self, db_session: Session, test_sender_key: str):
         """Test /who with invalid hours argument."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/who abc", test_sender_key)
+        response = await dispatcher.dispatch("!who abc", test_sender_key)
 
         assert response is not None
-        assert "uso" in response.lower() or "example" in response.lower() or "/who" in response.lower()
+        assert "uso" in response.lower() or "example" in response.lower() or "!who" in response.lower()
 
     @pytest.mark.asyncio
     async def test_who_negative_hours(self, db_session: Session, test_sender_key: str):
         """Test /who with negative hours."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/who -5", test_sender_key)
+        response = await dispatcher.dispatch("!who -5", test_sender_key)
 
         assert response is not None
         assert "positivo" in response.lower() or "uso" in response.lower()
@@ -102,7 +102,7 @@ class TestWhoCommand:
         """Test /who caps hours at maximum."""
         dispatcher = CommandDispatcher(session=db_session)
         # 1000 hours should be capped to 168 (MAX_HOURS)
-        response = await dispatcher.dispatch("/who 1000", test_sender_key)
+        response = await dispatcher.dispatch("!who 1000", test_sender_key)
 
         assert response is not None
         # Should work but cap at 168h
@@ -122,7 +122,7 @@ class TestWhoCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/who", test_sender_key)
+        response = await dispatcher.dispatch("!who", test_sender_key)
 
         assert response is not None
         assert "[A]" in response
@@ -141,7 +141,7 @@ class TestWhoCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/who", test_sender_key)
+        response = await dispatcher.dispatch("!who", test_sender_key)
 
         assert response is not None
         assert "[M]" in response
@@ -161,7 +161,7 @@ class TestWhoCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/who", test_sender_key)
+        response = await dispatcher.dispatch("!who", test_sender_key)
 
         assert response is not None
         assert "BannedUser" not in response
@@ -201,7 +201,7 @@ class TestWhoCommand:
 
         dispatcher = CommandDispatcher(session=db_session)
         # Check with 12 hour window
-        response = await dispatcher.dispatch("/who 12", test_sender_key)
+        response = await dispatcher.dispatch("!who 12", test_sender_key)
 
         assert response is not None
         assert "OldUser" not in response

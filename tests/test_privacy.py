@@ -280,7 +280,7 @@ class TestEphemeralMessages:
     @pytest.mark.asyncio
     async def test_ephemeral_msg_command(self, dispatcher, sender_key, user, other_user):
         """Test /msg! command sends ephemeral message."""
-        response = await dispatcher.dispatch("/msg! OtherUser Ciao!", sender_key)
+        response = await dispatcher.dispatch("!msg! OtherUser Ciao!", sender_key)
 
         assert "effimero" in response
         assert "non salvato" in response
@@ -295,7 +295,7 @@ class TestEphemeralMessages:
         """Test ephemeral messages are NOT saved to database."""
         initial_count = db_session.query(PrivateMessage).count()
 
-        await dispatcher.dispatch("/msg! OtherUser Secret!", sender_key)
+        await dispatcher.dispatch("!msg! OtherUser Secret!", sender_key)
 
         # Database should have same count
         final_count = db_session.query(PrivateMessage).count()
@@ -312,7 +312,7 @@ class TestEphemeralMessages:
             message="Ephemeral hello!",
         )
 
-        response = await dispatcher.dispatch("/inbox", sender_key)
+        response = await dispatcher.dispatch("!inbox", sender_key)
 
         assert "effimeri" in response
         assert "OtherUser" in response
@@ -329,10 +329,10 @@ class TestEphemeralMessages:
         )
 
         # First read
-        await dispatcher.dispatch("/inbox", sender_key)
+        await dispatcher.dispatch("!inbox", sender_key)
 
         # Second read should not show ephemeral
-        response = await dispatcher.dispatch("/inbox", sender_key)
+        response = await dispatcher.dispatch("!inbox", sender_key)
         assert "effimeri" not in response
 
 
@@ -346,7 +346,7 @@ class TestGdprCommand:
     @pytest.mark.asyncio
     async def test_gdpr_command(self, dispatcher, sender_key, user):
         """Test /gdpr command shows privacy info."""
-        response = await dispatcher.dispatch("/gdpr", sender_key)
+        response = await dispatcher.dispatch("!gdpr", sender_key)
 
         assert "GDPR" in response
         assert "Retention" in response
@@ -370,14 +370,14 @@ class TestCleanupCommand:
     @pytest.mark.asyncio
     async def test_cleanup_non_admin_denied(self, dispatcher, sender_key, user):
         """Test non-admin cannot run cleanup."""
-        response = await dispatcher.dispatch("/cleanup", sender_key)
+        response = await dispatcher.dispatch("!cleanup", sender_key)
 
         assert "Permesso negato" in response
 
     @pytest.mark.asyncio
     async def test_cleanup_dry_run(self, dispatcher, sender_key, admin_user):
         """Test cleanup dry-run mode."""
-        response = await dispatcher.dispatch("/cleanup --dry-run", sender_key)
+        response = await dispatcher.dispatch("!cleanup --dry-run", sender_key)
 
         assert "preview" in response or "dry-run" in response
         assert "da eliminare" in response
@@ -400,7 +400,7 @@ class TestCleanupCommand:
         db_session.add(old_pm)
         db_session.commit()
 
-        response = await dispatcher.dispatch("/cleanup", sender_key)
+        response = await dispatcher.dispatch("!cleanup", sender_key)
 
         assert "completato" in response or "eliminat" in response
 
@@ -415,7 +415,7 @@ class TestMyDataCommand:
     @pytest.mark.asyncio
     async def test_mydata_command(self, dispatcher, sender_key, user):
         """Test /mydata shows user's stored data."""
-        response = await dispatcher.dispatch("/mydata", sender_key)
+        response = await dispatcher.dispatch("!mydata", sender_key)
 
         assert "dati salvati" in response
         assert "Nickname" in response
@@ -445,7 +445,7 @@ class TestMyDataCommand:
         ))
         db_session.commit()
 
-        response = await dispatcher.dispatch("/mydata", sender_key)
+        response = await dispatcher.dispatch("!mydata", sender_key)
 
         assert "Messaggi pubblici: 3" in response
         assert "PM inviati: 1" in response
@@ -463,7 +463,7 @@ class TestPrivacyInfo:
         notice = PrivacyInfo.get_privacy_notice()
 
         assert "Privacy" in notice
-        assert "/msg!" in notice
+        assert "!msg!" in notice
 
     def test_gdpr_info(self):
         """Test GDPR info text."""

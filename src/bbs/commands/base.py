@@ -87,7 +87,7 @@ class BaseCommand(ABC):
 
     def get_help(self) -> str:
         """Get help text for this command."""
-        return f"/{self.name}: {self.description}\nUso: {self.usage}"
+        return f"!{self.name}: {self.description}\nUso: {self.usage}"
 
 
 class CommandRegistry:

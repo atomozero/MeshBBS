@@ -11,7 +11,7 @@ from typing import Optional
 from bbs.models.base import get_session, init_database
 from bbs.models.activity_log import ActivityLog, EventType, log_activity
 from bbs.commands.dispatcher import CommandDispatcher
-from meshcore.connection import BaseMeshCoreConnection, MeshCoreConnection
+from meshcore.connection import BaseMeshCoreConnection, MeshCoreConnection, TCPMeshCoreConnection
 from meshcore.messages import Message
 from meshcore.state import get_state_manager
 from utils.config import Config, get_config
@@ -46,10 +46,18 @@ class BBSCore:
             connection: MeshCore connection (creates default if None)
         """
         self.config = config or get_config()
-        self.connection = connection or MeshCoreConnection(
-            port=self.config.serial_port,
-            baud_rate=self.config.baud_rate,
-        )
+        if connection:
+            self.connection = connection
+        elif self.config.connection_mode == "tcp":
+            self.connection = TCPMeshCoreConnection(
+                host=self.config.tcp_host,
+                port=self.config.tcp_port,
+            )
+        else:
+            self.connection = MeshCoreConnection(
+                port=self.config.serial_port,
+                baud_rate=self.config.baud_rate,
+            )
         self.state_manager = get_state_manager()
 
         self._running = False

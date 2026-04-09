@@ -390,7 +390,7 @@ class TestFormatMentions:
         assert "Menzioni (1)" in result
         assert "@TestSender" in result
         assert "#generale" in result
-        assert "/read 42" in result
+        assert "!read 42" in result
 
     def test_format_multiple_mentions(self):
         """Test formatting multiple mentions."""
@@ -450,7 +450,7 @@ class TestMentionsInCommands:
         dispatcher = CommandDispatcher(db_session)
 
         response = await dispatcher.dispatch(
-            "/post Hey @Recipient check this out!",
+            "!post Hey @Recipient check this out!",
             "sender12345678",
         )
 
@@ -476,8 +476,8 @@ class TestMentionsInCommands:
         )
 
         # Check inbox
-        response = await dispatcher.dispatch("/inbox", "recipient12345")
+        response = await dispatcher.dispatch("!inbox", "recipient12345")
 
         assert "Menzioni" in response
         assert "@Sender" in response
-        assert "/read 1" in response
+        assert "!read 1" in response

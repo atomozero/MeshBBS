@@ -20,7 +20,7 @@ class TestKickCommand:
     async def test_kick_no_args(self, db_session: Session, admin_sender_key: str):
         """Test /kick without arguments shows usage."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/kick", admin_sender_key)
+        response = await dispatcher.dispatch("!kick", admin_sender_key)
 
         assert response is not None
         assert "uso" in response.lower()
@@ -35,7 +35,7 @@ class TestKickCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/kick Target", test_sender_key)
+        response = await dispatcher.dispatch("!kick Target", test_sender_key)
 
         assert response is not None
         assert "permesso negato" in response.lower()
@@ -46,7 +46,7 @@ class TestKickCommand:
     ):
         """Test /kick with non-existent user."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/kick NonExistent", admin_sender_key)
+        response = await dispatcher.dispatch("!kick NonExistent", admin_sender_key)
 
         assert response is not None
         assert "non trovato" in response.lower()
@@ -61,7 +61,7 @@ class TestKickCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/kick Troublemaker", admin_sender_key)
+        response = await dispatcher.dispatch("!kick Troublemaker", admin_sender_key)
 
         assert response is not None
         assert "espulso" in response.lower()
@@ -80,7 +80,7 @@ class TestKickCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/kick Spammer 60", admin_sender_key)
+        response = await dispatcher.dispatch("!kick Spammer 60", admin_sender_key)
 
         assert response is not None
         assert "espulso" in response.lower()
@@ -99,7 +99,7 @@ class TestKickCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/kick BadUser 15 comportamento scorretto", admin_sender_key)
+        response = await dispatcher.dispatch("!kick BadUser 15 comportamento scorretto", admin_sender_key)
 
         assert response is not None
         assert "espulso" in response.lower()
@@ -119,7 +119,7 @@ class TestKickCommand:
 
         dispatcher = CommandDispatcher(session=db_session)
         # Try to kick for 10000 minutes (should be capped to 1440)
-        response = await dispatcher.dispatch("/kick LongKick 10000", admin_sender_key)
+        response = await dispatcher.dispatch("!kick LongKick 10000", admin_sender_key)
 
         assert response is not None
         assert "1440 minuti" in response.lower()
@@ -130,7 +130,7 @@ class TestKickCommand:
     ):
         """Test admin cannot kick themselves."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch(f"/kick {admin_sender_key[:8]}", admin_sender_key)
+        response = await dispatcher.dispatch(f"!kick {admin_sender_key[:8]}", admin_sender_key)
 
         assert response is not None
         assert "te stesso" in response.lower()
@@ -145,7 +145,7 @@ class TestKickCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/kick OtherAdmin", admin_sender_key)
+        response = await dispatcher.dispatch("!kick OtherAdmin", admin_sender_key)
 
         assert response is not None
         assert "non puoi espellere un admin" in response.lower()
@@ -161,7 +161,7 @@ class TestKickCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/kick AlreadyKicked", admin_sender_key)
+        response = await dispatcher.dispatch("!kick AlreadyKicked", admin_sender_key)
 
         assert response is not None
         assert "già espulso" in response.lower()
@@ -177,7 +177,7 @@ class TestKickCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/kick Banned", admin_sender_key)
+        response = await dispatcher.dispatch("!kick Banned", admin_sender_key)
 
         assert response is not None
         assert "già bannato" in response.lower()
@@ -190,7 +190,7 @@ class TestUnkickCommand:
     async def test_unkick_no_args(self, db_session: Session, admin_sender_key: str):
         """Test /unkick without arguments shows usage."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/unkick", admin_sender_key)
+        response = await dispatcher.dispatch("!unkick", admin_sender_key)
 
         assert response is not None
         assert "uso" in response.lower()
@@ -206,7 +206,7 @@ class TestUnkickCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/unkick Kicked", test_sender_key)
+        response = await dispatcher.dispatch("!unkick Kicked", test_sender_key)
 
         assert response is not None
         assert "permesso negato" in response.lower()
@@ -224,7 +224,7 @@ class TestUnkickCommand:
         assert target.is_kicked is True
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/unkick Forgiven", admin_sender_key)
+        response = await dispatcher.dispatch("!unkick Forgiven", admin_sender_key)
 
         assert response is not None
         assert "può nuovamente accedere" in response.lower()
@@ -242,7 +242,7 @@ class TestUnkickCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/unkick Active", admin_sender_key)
+        response = await dispatcher.dispatch("!unkick Active", admin_sender_key)
 
         assert response is not None
         assert "non è espulso" in response.lower()
@@ -253,7 +253,7 @@ class TestUnkickCommand:
     ):
         """Test /unkick with non-existent user."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/unkick NonExistent", admin_sender_key)
+        response = await dispatcher.dispatch("!unkick NonExistent", admin_sender_key)
 
         assert response is not None
         assert "non trovato" in response.lower()
@@ -313,7 +313,7 @@ class TestKickEffects:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/help", test_sender_key)
+        response = await dispatcher.dispatch("!help", test_sender_key)
 
         assert response is not None
         assert "accesso negato" in response.lower()
@@ -329,7 +329,7 @@ class TestKickEffects:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/post Test", test_sender_key)
+        response = await dispatcher.dispatch("!post Test", test_sender_key)
 
         assert response is not None
         assert "accesso negato" in response.lower()
@@ -346,7 +346,7 @@ class TestKickEffects:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/help", test_sender_key)
+        response = await dispatcher.dispatch("!help", test_sender_key)
 
         assert response is not None
         # Should NOT be access denied
@@ -365,11 +365,11 @@ class TestKickEffects:
         dispatcher = CommandDispatcher(session=db_session)
 
         # Unkick user
-        await dispatcher.dispatch("/unkick WasKicked", admin_sender_key)
+        await dispatcher.dispatch("!unkick WasKicked", admin_sender_key)
         db_session.commit()
 
         # Now user should be able to post
-        response = await dispatcher.dispatch("/post Back online!", test_sender_key_2)
+        response = await dispatcher.dispatch("!post Back online!", test_sender_key_2)
 
         assert response is not None
         assert "pubblicato" in response.lower()

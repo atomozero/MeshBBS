@@ -52,7 +52,7 @@ class TestBBSCore:
 
         message = Message(
             sender_key=test_sender_key,
-            text="/help",
+            text="!help",
             recipient_key=bbs_core.connection.identity.public_key,
         )
 
@@ -91,7 +91,7 @@ class TestBBSCore:
 
         message = Message(
             sender_key=test_sender_key,
-            text="/unknowncommand",
+            text="!unknowncommand",
             recipient_key=bbs_core.connection.identity.public_key,
         )
 
@@ -116,7 +116,7 @@ class TestBBSCore:
         # Try to list in a non-existent area
         list_msg = Message(
             sender_key=test_sender_key,
-            text="/list general",
+            text="!list general",
             recipient_key=bbs_core.connection.identity.public_key,
         )
         response = await bbs_core.handle_message(list_msg)

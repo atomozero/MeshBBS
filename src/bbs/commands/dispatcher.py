@@ -131,9 +131,9 @@ class CommandDispatcher:
         command_class = CommandRegistry.get(parsed.command)
 
         if not command_class:
-            logger.debug(f"Unknown command: /{parsed.command}")
+            logger.debug(f"Unknown command: !{parsed.command}")
             return self._format_response(
-                f"Comando '/{parsed.command}' sconosciuto. Usa /help"
+                f"Comando '!{parsed.command}' sconosciuto. Usa !help"
             )
 
         # Check admin permission

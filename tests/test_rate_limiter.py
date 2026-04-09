@@ -284,11 +284,11 @@ class TestRateLimiterIntegration:
         dispatcher = CommandDispatcher(db_session, rate_limiter=limiter)
 
         # First command should succeed
-        response1 = await dispatcher.dispatch("/help", "user12345678")
+        response1 = await dispatcher.dispatch("!help", "user12345678")
         assert "Comandi" in response1
 
         # Second command immediately should be rate limited
-        response2 = await dispatcher.dispatch("/help", "user12345678")
+        response2 = await dispatcher.dispatch("!help", "user12345678")
         assert "Troppo veloce" in response2
 
     @pytest.mark.asyncio
@@ -307,10 +307,10 @@ class TestRateLimiterIntegration:
         dispatcher = CommandDispatcher(db_session, rate_limiter=limiter)
 
         # First command
-        response1 = await dispatcher.dispatch("/help", "admin1234567")
+        response1 = await dispatcher.dispatch("!help", "admin1234567")
         assert "Comandi" in response1
 
         # Second command immediately - admin should not be rate limited
-        response2 = await dispatcher.dispatch("/help", "admin1234567")
+        response2 = await dispatcher.dispatch("!help", "admin1234567")
         assert "Comandi" in response2
         assert "Troppo veloce" not in response2

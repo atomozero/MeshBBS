@@ -56,7 +56,7 @@ class MsgCommand(BaseCommand):
 
     name = "msg"
     description = "Invia un messaggio privato"
-    usage = "/msg <utente> <messaggio>"
+    usage = "!msg <utente> <messaggio>"
     aliases = ["pm", "dm", "tell"]
 
     MAX_MESSAGE_LENGTH = 200
@@ -82,7 +82,7 @@ class MsgCommand(BaseCommand):
         # Check arguments
         if len(args) < 2:
             return CommandResult.fail(
-                "[BBS] Uso: /msg <utente> <messaggio>\n"
+                "[BBS] Uso: !msg <utente> <messaggio>\n"
                 "Utente: nickname o chiave pubblica (8+ char)"
             )
 
@@ -182,7 +182,7 @@ class EphemeralMsgCommand(BaseCommand):
 
     name = "msg!"
     description = "Invia PM effimero (non salvato)"
-    usage = "/msg! <utente> <messaggio>"
+    usage = "!msg! <utente> <messaggio>"
     aliases = ["pm!", "dm!"]
 
     MAX_MESSAGE_LENGTH = 200
@@ -210,7 +210,7 @@ class EphemeralMsgCommand(BaseCommand):
         # Check arguments
         if len(args) < 2:
             return CommandResult.fail(
-                "[BBS] Uso: /msg! <utente> <messaggio>\n"
+                "[BBS] Uso: !msg! <utente> <messaggio>\n"
                 "Il messaggio NON viene salvato nel database"
             )
 

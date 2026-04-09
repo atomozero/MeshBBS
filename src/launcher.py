@@ -53,11 +53,21 @@ Examples:
         """,
     )
 
-    # BBS options
+    # Connection mode
+    parser.add_argument("--tcp", action="store_true",
+                        help="Use TCP connection instead of serial")
+    parser.add_argument("--tcp-host", default="192.168.1.100",
+                        help="TCP host for companion radio (default: 192.168.1.100)")
+    parser.add_argument("--tcp-port", type=int, default=5000,
+                        help="TCP port for companion radio (default: 5000)")
+
+    # Serial options (default mode)
     parser.add_argument("-p", "--port", default="/dev/ttyUSB0",
                         help="Serial port for companion radio (default: /dev/ttyUSB0)")
     parser.add_argument("-b", "--baud", type=int, default=115200,
                         help="Baud rate (default: 115200)")
+
+    # BBS options
     parser.add_argument("-d", "--database", default="data/bbs.db",
                         help="Database path (default: data/bbs.db)")
     parser.add_argument("-n", "--name", default="MeshCore BBS",
@@ -176,8 +186,11 @@ def main():
 
     # Create BBS configuration
     config = Config(
+        connection_mode="tcp" if args.tcp else "serial",
         serial_port=args.port,
         baud_rate=args.baud,
+        tcp_host=args.tcp_host,
+        tcp_port=args.tcp_port,
         database_path=args.database,
         log_path=args.log_file,
         log_level=log_level,
@@ -199,7 +212,10 @@ def main():
     mode = "BBS only" if args.bbs_only else "Web only" if args.web_only else "BBS + Web"
     logger.info(f"Mode: {mode}")
     if not args.web_only:
-        logger.info(f"Radio: {config.serial_port} @ {config.baud_rate}")
+        if args.tcp:
+            logger.info(f"Radio: TCP {config.tcp_host}:{config.tcp_port}")
+        else:
+            logger.info(f"Radio: Serial {config.serial_port} @ {config.baud_rate}")
     if not args.bbs_only:
         logger.info(f"Web: http://{args.web_host}:{args.web_port}")
     logger.info(f"Database: {config.database_path}")

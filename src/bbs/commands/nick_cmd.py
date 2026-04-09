@@ -19,7 +19,7 @@ class NickCommand(BaseCommand):
 
     name = "nick"
     description = "Imposta il tuo nickname"
-    usage = "/nick <nome>"
+    usage = "!nick <nome>"
     aliases = ["nickname", "name"]
 
     MIN_LENGTH = 2
@@ -47,7 +47,7 @@ class NickCommand(BaseCommand):
                 )
             else:
                 return CommandResult.ok(
-                    f"[BBS] Nessun nick impostato. Usa: /nick <nome>"
+                    f"[BBS] Nessun nick impostato. Usa: !nick <nome>"
                 )
 
         nickname = args[0]

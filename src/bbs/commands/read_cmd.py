@@ -18,7 +18,7 @@ class ReadCommand(BaseCommand):
 
     name = "read"
     description = "Leggi un messaggio"
-    usage = "/read <id>"
+    usage = "!read <id>"
     aliases = ["r"]
 
     MAX_RESPONSE_LENGTH = 180
@@ -83,7 +83,7 @@ class ReadCommand(BaseCommand):
             response += f"\n[{message.reply_count} risposte]"
 
         # Add reply hint
-        response += f"\nRispondi: /reply {msg_id} <testo>"
+        response += f"\nRispondi: !reply {msg_id} <testo>"
 
         # Truncate if too long (but keep the reply hint)
         if len(response) > self.MAX_RESPONSE_LENGTH + 50:
@@ -97,6 +97,6 @@ class ReadCommand(BaseCommand):
             )
             if message.reply_count > 0:
                 response += f"\n[{message.reply_count} risposte]"
-            response += f"\nRispondi: /reply {msg_id} <testo>"
+            response += f"\nRispondi: !reply {msg_id} <testo>"
 
         return CommandResult.ok(response)

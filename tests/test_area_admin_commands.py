@@ -19,7 +19,7 @@ class TestNewAreaCommand:
     async def test_newarea_no_args(self, db_session: Session, admin_sender_key: str):
         """Test /newarea without arguments shows usage."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/newarea", admin_sender_key)
+        response = await dispatcher.dispatch("!newarea", admin_sender_key)
 
         assert response is not None
         assert "uso" in response.lower()
@@ -30,7 +30,7 @@ class TestNewAreaCommand:
     ):
         """Test non-admin cannot use /newarea."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/newarea test", test_sender_key)
+        response = await dispatcher.dispatch("!newarea test", test_sender_key)
 
         assert response is not None
         assert "permesso negato" in response.lower()
@@ -41,7 +41,7 @@ class TestNewAreaCommand:
     ):
         """Test successful area creation."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/newarea gaming", admin_sender_key)
+        response = await dispatcher.dispatch("!newarea gaming", admin_sender_key)
 
         assert response is not None
         assert "creata" in response.lower()
@@ -58,7 +58,7 @@ class TestNewAreaCommand:
         """Test area creation with description."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch(
-            "/newarea music Discussioni musicali", admin_sender_key
+            "!newarea music Discussioni musicali", admin_sender_key
         )
 
         assert response is not None
@@ -75,7 +75,7 @@ class TestNewAreaCommand:
     ):
         """Test area creation with # prefix (should be stripped)."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/newarea #sports", admin_sender_key)
+        response = await dispatcher.dispatch("!newarea #sports", admin_sender_key)
 
         assert response is not None
         assert "creata" in response.lower()
@@ -89,7 +89,7 @@ class TestNewAreaCommand:
     ):
         """Test creating area that already exists."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/newarea generale", admin_sender_key)
+        response = await dispatcher.dispatch("!newarea generale", admin_sender_key)
 
         assert response is not None
         assert "esiste già" in response.lower()
@@ -100,7 +100,7 @@ class TestNewAreaCommand:
     ):
         """Test area name too short."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/newarea a", admin_sender_key)
+        response = await dispatcher.dispatch("!newarea a", admin_sender_key)
 
         assert response is not None
         assert "troppo corto" in response.lower()
@@ -112,7 +112,7 @@ class TestNewAreaCommand:
         """Test area name too long."""
         long_name = "a" * 50
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch(f"/newarea {long_name}", admin_sender_key)
+        response = await dispatcher.dispatch(f"!newarea {long_name}", admin_sender_key)
 
         assert response is not None
         assert "troppo lungo" in response.lower()
@@ -123,7 +123,7 @@ class TestNewAreaCommand:
     ):
         """Test area name with invalid characters."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/newarea test@area", admin_sender_key)
+        response = await dispatcher.dispatch("!newarea test@area", admin_sender_key)
 
         assert response is not None
         assert "non valido" in response.lower()
@@ -134,7 +134,7 @@ class TestNewAreaCommand:
     ):
         """Test area name starting with number (invalid)."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/newarea 123test", admin_sender_key)
+        response = await dispatcher.dispatch("!newarea 123test", admin_sender_key)
 
         assert response is not None
         assert "non valido" in response.lower()
@@ -145,7 +145,7 @@ class TestNewAreaCommand:
     ):
         """Test area name with underscore (valid)."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/newarea off_topic", admin_sender_key)
+        response = await dispatcher.dispatch("!newarea off_topic", admin_sender_key)
 
         assert response is not None
         assert "creata" in response.lower()
@@ -156,7 +156,7 @@ class TestNewAreaCommand:
     ):
         """Test area name with hyphen (valid)."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/newarea off-topic", admin_sender_key)
+        response = await dispatcher.dispatch("!newarea off-topic", admin_sender_key)
 
         assert response is not None
         assert "creata" in response.lower()
@@ -180,7 +180,7 @@ class TestDelAreaCommand:
     async def test_delarea_no_args(self, db_session: Session, admin_sender_key: str):
         """Test /delarea without arguments shows usage."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/delarea", admin_sender_key)
+        response = await dispatcher.dispatch("!delarea", admin_sender_key)
 
         assert response is not None
         assert "uso" in response.lower()
@@ -191,7 +191,7 @@ class TestDelAreaCommand:
     ):
         """Test non-admin cannot use /delarea."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/delarea test", test_sender_key)
+        response = await dispatcher.dispatch("!delarea test", test_sender_key)
 
         assert response is not None
         assert "permesso negato" in response.lower()
@@ -207,7 +207,7 @@ class TestDelAreaCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/delarea todelete", admin_sender_key)
+        response = await dispatcher.dispatch("!delarea todelete", admin_sender_key)
 
         assert response is not None
         assert "eliminata" in response.lower()
@@ -222,7 +222,7 @@ class TestDelAreaCommand:
     ):
         """Test deleting non-existent area."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/delarea nonexistent", admin_sender_key)
+        response = await dispatcher.dispatch("!delarea nonexistent", admin_sender_key)
 
         assert response is not None
         assert "non trovata" in response.lower()
@@ -233,7 +233,7 @@ class TestDelAreaCommand:
     ):
         """Test cannot delete protected area (generale)."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/delarea generale", admin_sender_key)
+        response = await dispatcher.dispatch("!delarea generale", admin_sender_key)
 
         assert response is not None
         assert "protetta" in response.lower()
@@ -249,7 +249,7 @@ class TestDelAreaCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/delarea withmessages", admin_sender_key)
+        response = await dispatcher.dispatch("!delarea withmessages", admin_sender_key)
 
         assert response is not None
         assert "eliminata" in response.lower()
@@ -265,7 +265,7 @@ class TestDelAreaCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/delarea #hashtest", admin_sender_key)
+        response = await dispatcher.dispatch("!delarea #hashtest", admin_sender_key)
 
         assert response is not None
         assert "eliminata" in response.lower()
@@ -278,7 +278,7 @@ class TestEditAreaCommand:
     async def test_editarea_no_args(self, db_session: Session, admin_sender_key: str):
         """Test /editarea without arguments shows usage."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/editarea", admin_sender_key)
+        response = await dispatcher.dispatch("!editarea", admin_sender_key)
 
         assert response is not None
         assert "uso" in response.lower()
@@ -289,7 +289,7 @@ class TestEditAreaCommand:
     ):
         """Test non-admin cannot use /editarea."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/editarea test desc Test", test_sender_key)
+        response = await dispatcher.dispatch("!editarea test desc Test", test_sender_key)
 
         assert response is not None
         assert "permesso negato" in response.lower()
@@ -301,7 +301,7 @@ class TestEditAreaCommand:
         """Test changing area description."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch(
-            "/editarea tech desc Area per discussioni tecniche", admin_sender_key
+            "!editarea tech desc Area per discussioni tecniche", admin_sender_key
         )
 
         assert response is not None
@@ -317,7 +317,7 @@ class TestEditAreaCommand:
         """Test setting area to readonly."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch(
-            "/editarea tech readonly on", admin_sender_key
+            "!editarea tech readonly on", admin_sender_key
         )
 
         assert response is not None
@@ -338,7 +338,7 @@ class TestEditAreaCommand:
 
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch(
-            "/editarea tech readonly off", admin_sender_key
+            "!editarea tech readonly off", admin_sender_key
         )
 
         assert response is not None
@@ -354,7 +354,7 @@ class TestEditAreaCommand:
         """Test hiding an area."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch(
-            "/editarea tech public off", admin_sender_key
+            "!editarea tech public off", admin_sender_key
         )
 
         assert response is not None
@@ -375,7 +375,7 @@ class TestEditAreaCommand:
 
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch(
-            "/editarea tech public on", admin_sender_key
+            "!editarea tech public on", admin_sender_key
         )
 
         assert response is not None
@@ -391,7 +391,7 @@ class TestEditAreaCommand:
         """Test editing non-existent area."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch(
-            "/editarea nonexistent desc Test", admin_sender_key
+            "!editarea nonexistent desc Test", admin_sender_key
         )
 
         assert response is not None
@@ -404,7 +404,7 @@ class TestEditAreaCommand:
         """Test editing with unknown property."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch(
-            "/editarea tech unknown value", admin_sender_key
+            "!editarea tech unknown value", admin_sender_key
         )
 
         assert response is not None
@@ -417,7 +417,7 @@ class TestEditAreaCommand:
         """Test changing description without value."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch(
-            "/editarea tech desc", admin_sender_key
+            "!editarea tech desc", admin_sender_key
         )
 
         assert response is not None
@@ -430,7 +430,7 @@ class TestEditAreaCommand:
         """Test readonly with invalid value."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch(
-            "/editarea tech readonly maybe", admin_sender_key
+            "!editarea tech readonly maybe", admin_sender_key
         )
 
         assert response is not None
@@ -446,7 +446,7 @@ class TestListAreasAdminCommand:
     ):
         """Test non-admin cannot use /listareas."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/listareas", test_sender_key)
+        response = await dispatcher.dispatch("!listareas", test_sender_key)
 
         assert response is not None
         assert "permesso negato" in response.lower()
@@ -457,7 +457,7 @@ class TestListAreasAdminCommand:
     ):
         """Test listareas shows all areas."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/listareas", admin_sender_key)
+        response = await dispatcher.dispatch("!listareas", admin_sender_key)
 
         assert response is not None
         assert "aree" in response.lower()
@@ -475,7 +475,7 @@ class TestListAreasAdminCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/listareas", admin_sender_key)
+        response = await dispatcher.dispatch("!listareas", admin_sender_key)
 
         assert response is not None
         assert "ro" in response.lower()
@@ -491,7 +491,7 @@ class TestListAreasAdminCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/listareas", admin_sender_key)
+        response = await dispatcher.dispatch("!listareas", admin_sender_key)
 
         assert response is not None
         assert "hidden" in response.lower()
@@ -502,7 +502,7 @@ class TestListAreasAdminCommand:
     ):
         """Test listareas shows message count."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/listareas", admin_sender_key)
+        response = await dispatcher.dispatch("!listareas", admin_sender_key)
 
         assert response is not None
         assert "msg" in response.lower()
@@ -513,7 +513,7 @@ class TestListAreasAdminCommand:
     ):
         """Test listareas shows total count."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/listareas", admin_sender_key)
+        response = await dispatcher.dispatch("!listareas", admin_sender_key)
 
         assert response is not None
         assert "totale" in response.lower()
@@ -531,29 +531,29 @@ class TestAreaWorkflow:
 
         # Create area
         response = await dispatcher.dispatch(
-            "/newarea workflow Test workflow area", admin_sender_key
+            "!newarea workflow Test workflow area", admin_sender_key
         )
         assert "creata" in response.lower()
 
         # Modify description
         response = await dispatcher.dispatch(
-            "/editarea workflow desc Updated description", admin_sender_key
+            "!editarea workflow desc Updated description", admin_sender_key
         )
         assert "aggiornata" in response.lower()
 
         # Set readonly
         response = await dispatcher.dispatch(
-            "/editarea workflow readonly on", admin_sender_key
+            "!editarea workflow readonly on", admin_sender_key
         )
         assert "sola lettura" in response.lower()
 
         # Verify with listareas
-        response = await dispatcher.dispatch("/listareas", admin_sender_key)
+        response = await dispatcher.dispatch("!listareas", admin_sender_key)
         assert "workflow" in response.lower()
         assert "ro" in response.lower()
 
         # Delete
-        response = await dispatcher.dispatch("/delarea workflow", admin_sender_key)
+        response = await dispatcher.dispatch("!delarea workflow", admin_sender_key)
         assert "eliminata" in response.lower()
 
         # Verify deleted

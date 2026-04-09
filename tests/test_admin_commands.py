@@ -19,7 +19,7 @@ class TestBanCommand:
     async def test_ban_no_args(self, db_session: Session, admin_sender_key: str):
         """Test /ban without arguments shows usage."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/ban", admin_sender_key)
+        response = await dispatcher.dispatch("!ban", admin_sender_key)
 
         assert response is not None
         assert "uso" in response.lower()
@@ -35,7 +35,7 @@ class TestBanCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch(f"/ban Target", test_sender_key)
+        response = await dispatcher.dispatch(f"!ban Target", test_sender_key)
 
         assert response is not None
         assert "permesso negato" in response.lower()
@@ -46,7 +46,7 @@ class TestBanCommand:
     ):
         """Test /ban with non-existent user."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/ban NonExistent", admin_sender_key)
+        response = await dispatcher.dispatch("!ban NonExistent", admin_sender_key)
 
         assert response is not None
         assert "non trovato" in response.lower()
@@ -61,7 +61,7 @@ class TestBanCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/ban BadUser", admin_sender_key)
+        response = await dispatcher.dispatch("!ban BadUser", admin_sender_key)
 
         assert response is not None
         assert "bannato" in response.lower()
@@ -80,7 +80,7 @@ class TestBanCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/ban Spammer spam ripetuto", admin_sender_key)
+        response = await dispatcher.dispatch("!ban Spammer spam ripetuto", admin_sender_key)
 
         assert response is not None
         assert "bannato" in response.lower()
@@ -96,7 +96,7 @@ class TestBanCommand:
         """Test admin cannot ban themselves."""
         dispatcher = CommandDispatcher(session=db_session)
         # Admin tries to ban themselves by key prefix
-        response = await dispatcher.dispatch(f"/ban {admin_sender_key[:8]}", admin_sender_key)
+        response = await dispatcher.dispatch(f"!ban {admin_sender_key[:8]}", admin_sender_key)
 
         assert response is not None
         assert "te stesso" in response.lower()
@@ -111,7 +111,7 @@ class TestBanCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/ban OtherAdmin", admin_sender_key)
+        response = await dispatcher.dispatch("!ban OtherAdmin", admin_sender_key)
 
         assert response is not None
         assert "non puoi bannare un admin" in response.lower()
@@ -126,7 +126,7 @@ class TestBanCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/ban Banned", admin_sender_key)
+        response = await dispatcher.dispatch("!ban Banned", admin_sender_key)
 
         assert response is not None
         assert "già bannato" in response.lower()
@@ -141,7 +141,7 @@ class TestBanCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch(f"/ban {test_sender_key_2[:8]}", admin_sender_key)
+        response = await dispatcher.dispatch(f"!ban {test_sender_key_2[:8]}", admin_sender_key)
 
         assert response is not None
         assert "bannato" in response.lower()
@@ -154,7 +154,7 @@ class TestUnbanCommand:
     async def test_unban_no_args(self, db_session: Session, admin_sender_key: str):
         """Test /unban without arguments shows usage."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/unban", admin_sender_key)
+        response = await dispatcher.dispatch("!unban", admin_sender_key)
 
         assert response is not None
         assert "uso" in response.lower()
@@ -169,7 +169,7 @@ class TestUnbanCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/unban Banned", test_sender_key)
+        response = await dispatcher.dispatch("!unban Banned", test_sender_key)
 
         assert response is not None
         assert "permesso negato" in response.lower()
@@ -184,7 +184,7 @@ class TestUnbanCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/unban Forgiven", admin_sender_key)
+        response = await dispatcher.dispatch("!unban Forgiven", admin_sender_key)
 
         assert response is not None
         assert "rimosso" in response.lower()
@@ -202,7 +202,7 @@ class TestUnbanCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/unban Active", admin_sender_key)
+        response = await dispatcher.dispatch("!unban Active", admin_sender_key)
 
         assert response is not None
         assert "non è bannato" in response.lower()
@@ -215,7 +215,7 @@ class TestMuteCommand:
     async def test_mute_no_args(self, db_session: Session, admin_sender_key: str):
         """Test /mute without arguments shows usage."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/mute", admin_sender_key)
+        response = await dispatcher.dispatch("!mute", admin_sender_key)
 
         assert response is not None
         assert "uso" in response.lower()
@@ -230,7 +230,7 @@ class TestMuteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/mute Target", test_sender_key)
+        response = await dispatcher.dispatch("!mute Target", test_sender_key)
 
         assert response is not None
         assert "permesso negato" in response.lower()
@@ -245,7 +245,7 @@ class TestMuteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/mute Talkative", admin_sender_key)
+        response = await dispatcher.dispatch("!mute Talkative", admin_sender_key)
 
         assert response is not None
         assert "silenziato" in response.lower()
@@ -263,7 +263,7 @@ class TestMuteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/mute OffTopic discussione off-topic", admin_sender_key)
+        response = await dispatcher.dispatch("!mute OffTopic discussione off-topic", admin_sender_key)
 
         assert response is not None
         assert "silenziato" in response.lower()
@@ -278,7 +278,7 @@ class TestMuteCommand:
     ):
         """Test admin cannot mute themselves."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch(f"/mute {admin_sender_key[:8]}", admin_sender_key)
+        response = await dispatcher.dispatch(f"!mute {admin_sender_key[:8]}", admin_sender_key)
 
         assert response is not None
         assert "te stesso" in response.lower()
@@ -293,7 +293,7 @@ class TestMuteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/mute OtherAdmin", admin_sender_key)
+        response = await dispatcher.dispatch("!mute OtherAdmin", admin_sender_key)
 
         assert response is not None
         assert "non puoi silenziare un admin" in response.lower()
@@ -308,7 +308,7 @@ class TestMuteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/mute Silent", admin_sender_key)
+        response = await dispatcher.dispatch("!mute Silent", admin_sender_key)
 
         assert response is not None
         assert "già silenziato" in response.lower()
@@ -323,7 +323,7 @@ class TestMuteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/mute Banned", admin_sender_key)
+        response = await dispatcher.dispatch("!mute Banned", admin_sender_key)
 
         assert response is not None
         assert "bannato" in response.lower()
@@ -351,7 +351,7 @@ class TestUnmuteCommand:
     async def test_unmute_no_args(self, db_session: Session, admin_sender_key: str):
         """Test /unmute without arguments shows usage."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/unmute", admin_sender_key)
+        response = await dispatcher.dispatch("!unmute", admin_sender_key)
 
         assert response is not None
         assert "uso" in response.lower()
@@ -366,7 +366,7 @@ class TestUnmuteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/unmute Muted", test_sender_key)
+        response = await dispatcher.dispatch("!unmute Muted", test_sender_key)
 
         assert response is not None
         assert "permesso negato" in response.lower()
@@ -381,7 +381,7 @@ class TestUnmuteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/unmute Muted", admin_sender_key)
+        response = await dispatcher.dispatch("!unmute Muted", admin_sender_key)
 
         assert response is not None
         assert "può nuovamente scrivere" in response.lower()
@@ -399,7 +399,7 @@ class TestUnmuteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/unmute Active", admin_sender_key)
+        response = await dispatcher.dispatch("!unmute Active", admin_sender_key)
 
         assert response is not None
         assert "non è silenziato" in response.lower()
@@ -434,7 +434,7 @@ class TestMuteEffects:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/post Test message", test_sender_key)
+        response = await dispatcher.dispatch("!post Test message", test_sender_key)
 
         assert response is not None
         assert "non puoi pubblicare" in response.lower()
@@ -457,7 +457,7 @@ class TestMuteEffects:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch(f"/reply {msg.id} My reply", test_sender_key)
+        response = await dispatcher.dispatch(f"!reply {msg.id} My reply", test_sender_key)
 
         assert response is not None
         assert "non puoi pubblicare" in response.lower()
@@ -473,7 +473,7 @@ class TestMuteEffects:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/msg Recipient Hello", test_sender_key)
+        response = await dispatcher.dispatch("!msg Recipient Hello", test_sender_key)
 
         assert response is not None
         assert "non puoi inviare" in response.lower()
@@ -495,7 +495,7 @@ class TestMuteEffects:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch(f"/read {msg.id}", test_sender_key)
+        response = await dispatcher.dispatch(f"!read {msg.id}", test_sender_key)
 
         assert response is not None
         assert "readable content" in response.lower()
@@ -513,11 +513,11 @@ class TestMuteEffects:
         dispatcher = CommandDispatcher(session=db_session)
 
         # Unmute user
-        await dispatcher.dispatch("/unmute WasMuted", admin_sender_key)
+        await dispatcher.dispatch("!unmute WasMuted", admin_sender_key)
         db_session.commit()
 
         # Now user should be able to post
-        response = await dispatcher.dispatch("/post Back to posting!", test_sender_key_2)
+        response = await dispatcher.dispatch("!post Back to posting!", test_sender_key_2)
 
         assert response is not None
         assert "pubblicato" in response.lower()
@@ -536,7 +536,7 @@ class TestBannedUserAccess:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/help", test_sender_key)
+        response = await dispatcher.dispatch("!help", test_sender_key)
 
         assert response is not None
         assert "accesso negato" in response.lower()

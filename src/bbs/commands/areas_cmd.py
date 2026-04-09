@@ -18,7 +18,7 @@ class AreasCommand(BaseCommand):
 
     name = "areas"
     description = "Lista aree disponibili"
-    usage = "/areas"
+    usage = "!areas"
     aliases = ["a", "boards"]
 
     def __init__(self, session: Session):

@@ -22,7 +22,7 @@ class InboxCommand(BaseCommand):
 
     name = "inbox"
     description = "Mostra messaggi privati ricevuti"
-    usage = "/inbox [n]"
+    usage = "!inbox [n]"
     aliases = ["mail", "pms"]
 
     DEFAULT_LIMIT = 5
@@ -57,7 +57,7 @@ class InboxCommand(BaseCommand):
                 limit = min(limit, self.MAX_LIMIT)
             except ValueError:
                 return CommandResult.fail(
-                    "[BBS] Uso: /inbox [numero]"
+                    "[BBS] Uso: !inbox [numero]"
                 )
 
         # Get and consume ephemeral messages (they disappear after reading)
@@ -110,7 +110,7 @@ class InboxCommand(BaseCommand):
                     f"{read_marker}#{msg.id} {sender_name} ({msg.age_string}): {msg.preview}"
                 )
 
-            lines.append("Usa /readpm <id> per leggere")
+            lines.append("Usa !readpm <id> per leggere")
         elif not ephemeral and not mentions:
             lines.append("[BBS] Nessun messaggio salvato")
 

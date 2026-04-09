@@ -22,7 +22,7 @@ class TestPostMultiArea:
     ):
         """Test /post without area uses default area."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/post Hello world!", test_sender_key)
+        response = await dispatcher.dispatch("!post Hello world!", test_sender_key)
 
         assert response is not None
         assert "pubblicato" in response.lower()
@@ -40,7 +40,7 @@ class TestPostMultiArea:
     ):
         """Test /post #area message syntax."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/post #tech Technical question", test_sender_key)
+        response = await dispatcher.dispatch("!post #tech Technical question", test_sender_key)
 
         assert response is not None
         assert "pubblicato" in response.lower()
@@ -58,7 +58,7 @@ class TestPostMultiArea:
     ):
         """Test /post areaname message syntax."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/post tech Another tech post", test_sender_key)
+        response = await dispatcher.dispatch("!post tech Another tech post", test_sender_key)
 
         assert response is not None
         assert "pubblicato" in response.lower()
@@ -75,7 +75,7 @@ class TestPostMultiArea:
     ):
         """Test /post with non-existent area."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/post #nonexistent Hello", test_sender_key)
+        response = await dispatcher.dispatch("!post #nonexistent Hello", test_sender_key)
 
         assert response is not None
         assert "non trovata" in response.lower()
@@ -87,7 +87,7 @@ class TestPostMultiArea:
     ):
         """Test area names are case-insensitive."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/post #TECH Uppercase area", test_sender_key)
+        response = await dispatcher.dispatch("!post #TECH Uppercase area", test_sender_key)
 
         assert response is not None
         assert "pubblicato" in response.lower()
@@ -108,7 +108,7 @@ class TestPostMultiArea:
             db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/post #emergenze Emergency!", test_sender_key)
+        response = await dispatcher.dispatch("!post #emergenze Emergency!", test_sender_key)
 
         assert response is not None
         assert "sola lettura" in response.lower()
@@ -119,7 +119,7 @@ class TestPostMultiArea:
     ):
         """Test /post #area without message text."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/post #tech", test_sender_key)
+        response = await dispatcher.dispatch("!post #tech", test_sender_key)
 
         assert response is not None
         assert "uso" in response.lower()
@@ -131,7 +131,7 @@ class TestPostMultiArea:
         """Test posting a message that starts with # (not an area)."""
         dispatcher = CommandDispatcher(session=db_session)
         # #hashtag is not a valid area, so entire message goes to default area
-        response = await dispatcher.dispatch("/post #hashtag is cool", test_sender_key)
+        response = await dispatcher.dispatch("!post #hashtag is cool", test_sender_key)
 
         # Should fail because #hashtag is not a valid area
         assert response is not None
@@ -146,7 +146,7 @@ class TestPostMultiArea:
         # Our implementation requires message after area, so this posts to default
         dispatcher = CommandDispatcher(session=db_session)
         # "tech" alone - no message after it, so "tech" IS the message
-        response = await dispatcher.dispatch("/post tech", test_sender_key)
+        response = await dispatcher.dispatch("!post tech", test_sender_key)
 
         assert response is not None
         assert "pubblicato" in response.lower()
@@ -163,7 +163,7 @@ class TestPostMultiArea:
     ):
         """Test response includes area name when not default."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/post #tech Test message", test_sender_key)
+        response = await dispatcher.dispatch("!post #tech Test message", test_sender_key)
 
         assert response is not None
         assert "#tech" in response.lower()
@@ -174,7 +174,7 @@ class TestPostMultiArea:
     ):
         """Test response doesn't show area when posting to default."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/post Just a message", test_sender_key)
+        response = await dispatcher.dispatch("!post Just a message", test_sender_key)
 
         assert response is not None
         assert "pubblicato" in response.lower()
@@ -188,7 +188,7 @@ class TestPostMultiArea:
         """Test message preserves multiple words."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch(
-            "/post #tech This is a longer message with multiple words", test_sender_key
+            "!post #tech This is a longer message with multiple words", test_sender_key
         )
 
         assert response is not None
@@ -227,7 +227,7 @@ class TestPostUsageHelp:
     ):
         """Test /post with no args shows usage with examples."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/post", test_sender_key)
+        response = await dispatcher.dispatch("!post", test_sender_key)
 
         assert response is not None
         assert "uso" in response.lower()
@@ -239,7 +239,7 @@ class TestPostUsageHelp:
     ):
         """Test invalid area shows list of available areas."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/post #invalid Test", test_sender_key)
+        response = await dispatcher.dispatch("!post #invalid Test", test_sender_key)
 
         assert response is not None
         assert "non trovata" in response.lower()

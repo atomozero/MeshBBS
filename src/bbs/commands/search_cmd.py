@@ -21,7 +21,7 @@ class SearchCommand(BaseCommand):
 
     name = "search"
     description = "Cerca nei messaggi"
-    usage = "/search [#area] <termine>"
+    usage = "!search [#area] <termine>"
     aliases = ["find", "s"]
 
     DEFAULT_LIMIT = 5
@@ -53,9 +53,9 @@ class SearchCommand(BaseCommand):
         """
         if not args:
             return CommandResult.fail(
-                "[BBS] Uso: /search [#area] <termine>\n"
-                "Esempio: /search ciao\n"
-                "Esempio: /search #tech python"
+                "[BBS] Uso: !search [#area] <termine>\n"
+                "Esempio: !search ciao\n"
+                "Esempio: !search #tech python"
             )
 
         # Parse area and query
@@ -64,7 +64,7 @@ class SearchCommand(BaseCommand):
         # Validate query
         if not query:
             return CommandResult.fail(
-                "[BBS] Uso: /search [#area] <termine>"
+                "[BBS] Uso: !search [#area] <termine>"
             )
 
         if len(query) < self.MIN_QUERY_LENGTH:
@@ -111,7 +111,7 @@ class SearchCommand(BaseCommand):
 
             lines.append(f"  #{msg.id} [{area}] {author}: {preview}")
 
-        lines.append("Usa /read <id> per leggere")
+        lines.append("Usa !read <id> per leggere")
 
         return CommandResult.ok("\n".join(lines))
 

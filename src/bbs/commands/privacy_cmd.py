@@ -25,7 +25,7 @@ class GdprCommand(BaseCommand):
 
     name = "gdpr"
     description = "Informazioni privacy e GDPR"
-    usage = "/gdpr"
+    usage = "!gdpr"
     aliases = ["privacy"]
     admin_only = False
 
@@ -76,7 +76,7 @@ class CleanupCommand(BaseCommand):
 
     name = "cleanup"
     description = "Esegue pulizia dati (retention)"
-    usage = "/cleanup [--dry-run]"
+    usage = "!cleanup [--dry-run]"
     aliases = ["retention"]
     admin_only = True
 
@@ -125,7 +125,7 @@ class CleanupCommand(BaseCommand):
                 f"  Log: {stats['expired_logs']}/{stats['total_logs']} da eliminare",
                 f"  Retention PM: {pm_retention} giorni",
                 f"  Retention Log: {log_retention} giorni",
-                "Esegui /cleanup per eliminare",
+                "Esegui !cleanup per eliminare",
             ]
 
             return CommandResult.ok("\n".join(lines))
@@ -153,7 +153,7 @@ class MyDataCommand(BaseCommand):
 
     name = "mydata"
     description = "Mostra i tuoi dati salvati"
-    usage = "/mydata"
+    usage = "!mydata"
     aliases = ["myprivacy"]
     admin_only = False
 
@@ -220,7 +220,7 @@ class MyDataCommand(BaseCommand):
             f"  PM inviati: {pm_sent}",
             f"  PM ricevuti: {pm_received}",
             f"  Log attivita: {log_entries}",
-            "Usa /delpm per eliminare PM",
+            "Usa !delpm per eliminare PM",
         ]
 
         return CommandResult.ok("\n".join(lines))

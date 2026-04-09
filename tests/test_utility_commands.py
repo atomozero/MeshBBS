@@ -68,19 +68,19 @@ class TestDelPmCommand:
     @pytest.mark.asyncio
     async def test_delpm_no_args(self, dispatcher, sender_key, user):
         """Test /delpm without arguments."""
-        response = await dispatcher.dispatch("/delpm", sender_key)
+        response = await dispatcher.dispatch("!delpm", sender_key)
         assert "Uso: /delpm" in response
 
     @pytest.mark.asyncio
     async def test_delpm_invalid_id(self, dispatcher, sender_key, user):
         """Test /delpm with invalid ID."""
-        response = await dispatcher.dispatch("/delpm abc", sender_key)
+        response = await dispatcher.dispatch("!delpm abc", sender_key)
         assert "ID non valido" in response
 
     @pytest.mark.asyncio
     async def test_delpm_not_found(self, dispatcher, sender_key, user):
         """Test /delpm with non-existent message."""
-        response = await dispatcher.dispatch("/delpm 999", sender_key)
+        response = await dispatcher.dispatch("!delpm 999", sender_key)
         assert "non trovato" in response
 
     @pytest.mark.asyncio
@@ -96,7 +96,7 @@ class TestDelPmCommand:
         db_session.commit()
         pm_id = pm.id
 
-        response = await dispatcher.dispatch(f"/delpm {pm_id}", sender_key)
+        response = await dispatcher.dispatch(f"!delpm {pm_id}", sender_key)
         assert "eliminato" in response
 
         # Verify deleted
@@ -116,7 +116,7 @@ class TestDelPmCommand:
         db_session.commit()
         pm_id = pm.id
 
-        response = await dispatcher.dispatch(f"/delpm {pm_id}", sender_key)
+        response = await dispatcher.dispatch(f"!delpm {pm_id}", sender_key)
         assert "eliminato" in response
 
     @pytest.mark.asyncio
@@ -136,7 +136,7 @@ class TestDelPmCommand:
         db_session.add(pm)
         db_session.commit()
 
-        response = await dispatcher.dispatch(f"/delpm {pm.id}", sender_key)
+        response = await dispatcher.dispatch(f"!delpm {pm.id}", sender_key)
         assert "non trovato" in response
 
     @pytest.mark.asyncio
@@ -150,7 +150,7 @@ class TestDelPmCommand:
         db_session.add(pm)
         db_session.commit()
 
-        response = await dispatcher.dispatch(f"/delpm #{pm.id}", sender_key)
+        response = await dispatcher.dispatch(f"!delpm #{pm.id}", sender_key)
         assert "eliminato" in response
 
     @pytest.mark.asyncio
@@ -192,7 +192,7 @@ class TestClearCommand:
     @pytest.mark.asyncio
     async def test_clear_no_unread(self, dispatcher, sender_key, user):
         """Test /clear with no unread messages."""
-        response = await dispatcher.dispatch("/clear", sender_key)
+        response = await dispatcher.dispatch("!clear", sender_key)
         assert "Nessun messaggio non letto" in response
 
     @pytest.mark.asyncio
@@ -209,7 +209,7 @@ class TestClearCommand:
             db_session.add(pm)
         db_session.commit()
 
-        response = await dispatcher.dispatch("/clear", sender_key)
+        response = await dispatcher.dispatch("!clear", sender_key)
         assert "5 messaggi marcati come letti" in response
 
         # Verify all are read
@@ -243,7 +243,7 @@ class TestClearCommand:
             db_session.add(pm)
         db_session.commit()
 
-        response = await dispatcher.dispatch("/clear", sender_key)
+        response = await dispatcher.dispatch("!clear", sender_key)
         assert "3 messaggi" in response
 
     @pytest.mark.asyncio
@@ -258,7 +258,7 @@ class TestClearCommand:
         db_session.add(pm)
         db_session.commit()
 
-        response = await dispatcher.dispatch("/readall", sender_key)
+        response = await dispatcher.dispatch("!readall", sender_key)
         assert "marcati come letti" in response
 
     @pytest.mark.asyncio
@@ -287,7 +287,7 @@ class TestStatsCommand:
     @pytest.mark.asyncio
     async def test_stats_basic(self, dispatcher, sender_key, user):
         """Test basic /stats output."""
-        response = await dispatcher.dispatch("/stats", sender_key)
+        response = await dispatcher.dispatch("!stats", sender_key)
         assert "[BBS] Statistiche:" in response
         assert "Utenti:" in response
         assert "Messaggi:" in response
@@ -302,7 +302,7 @@ class TestStatsCommand:
             db_session.add(User(public_key=f"user{i}1234567890"))
         db_session.commit()
 
-        response = await dispatcher.dispatch("/stats", sender_key)
+        response = await dispatcher.dispatch("!stats", sender_key)
         assert "6 totali" in response  # 1 original + 5 new
 
     @pytest.mark.asyncio
@@ -314,7 +314,7 @@ class TestStatsCommand:
         db_session.add(old_user)
         db_session.commit()
 
-        response = await dispatcher.dispatch("/stats", sender_key)
+        response = await dispatcher.dispatch("!stats", sender_key)
         # Old user shouldn't be counted as active
         assert "attivi (24h)" in response
 
@@ -331,7 +331,7 @@ class TestStatsCommand:
             db_session.add(msg)
         db_session.commit()
 
-        response = await dispatcher.dispatch("/stats", sender_key)
+        response = await dispatcher.dispatch("!stats", sender_key)
         assert "10 totali" in response
 
     @pytest.mark.asyncio
@@ -347,7 +347,7 @@ class TestStatsCommand:
         db_session.add(Area(name="stathidden", is_public=False))
         db_session.commit()
 
-        response = await dispatcher.dispatch("/stats", sender_key)
+        response = await dispatcher.dispatch("!stats", sender_key)
         expected_public = current_public + 3
         expected_total = current_total + 4
         assert f"{expected_public} pubbliche" in response
@@ -376,32 +376,32 @@ class TestInfoCommand:
     @pytest.mark.asyncio
     async def test_info_basic(self, dispatcher, sender_key, user):
         """Test basic /info output."""
-        response = await dispatcher.dispatch("/info", sender_key)
+        response = await dispatcher.dispatch("!info", sender_key)
         assert "[BBS] MeshCore BBS" in response
         assert "v1.0.0" in response
 
     @pytest.mark.asyncio
     async def test_info_shows_user_count(self, db_session, dispatcher, sender_key, user):
         """Test /info shows registered users."""
-        response = await dispatcher.dispatch("/info", sender_key)
+        response = await dispatcher.dispatch("!info", sender_key)
         assert "Utenti registrati:" in response
 
     @pytest.mark.asyncio
     async def test_info_shows_area_count(self, db_session, dispatcher, sender_key, user, area):
         """Test /info shows public areas."""
-        response = await dispatcher.dispatch("/info", sender_key)
+        response = await dispatcher.dispatch("!info", sender_key)
         assert "Aree pubbliche:" in response
 
     @pytest.mark.asyncio
     async def test_info_shows_protocol(self, dispatcher, sender_key, user):
         """Test /info shows protocol info."""
-        response = await dispatcher.dispatch("/info", sender_key)
+        response = await dispatcher.dispatch("!info", sender_key)
         assert "MeshCore LoRa" in response
 
     @pytest.mark.asyncio
     async def test_info_shows_license(self, dispatcher, sender_key, user):
         """Test /info shows license."""
-        response = await dispatcher.dispatch("/info", sender_key)
+        response = await dispatcher.dispatch("!info", sender_key)
         assert "MIT" in response
 
     @pytest.mark.asyncio
@@ -427,31 +427,31 @@ class TestWhoisCommand:
     @pytest.mark.asyncio
     async def test_whois_no_args(self, dispatcher, sender_key, user):
         """Test /whois without arguments."""
-        response = await dispatcher.dispatch("/whois", sender_key)
+        response = await dispatcher.dispatch("!whois", sender_key)
         assert "Uso: /whois" in response
 
     @pytest.mark.asyncio
     async def test_whois_not_found(self, dispatcher, sender_key, user):
         """Test /whois with non-existent user."""
-        response = await dispatcher.dispatch("/whois unknown", sender_key)
+        response = await dispatcher.dispatch("!whois unknown", sender_key)
         assert "non trovato" in response
 
     @pytest.mark.asyncio
     async def test_whois_by_nickname(self, dispatcher, sender_key, user, other_user):
         """Test /whois by nickname."""
-        response = await dispatcher.dispatch("/whois OtherUser", sender_key)
+        response = await dispatcher.dispatch("!whois OtherUser", sender_key)
         assert "Profilo: OtherUser" in response
 
     @pytest.mark.asyncio
     async def test_whois_by_public_key(self, dispatcher, sender_key, user, other_user, other_key):
         """Test /whois by public key."""
-        response = await dispatcher.dispatch(f"/whois {other_key[:8]}", sender_key)
+        response = await dispatcher.dispatch(f"!whois {other_key[:8]}", sender_key)
         assert "Profilo: OtherUser" in response
 
     @pytest.mark.asyncio
     async def test_whois_shows_role(self, dispatcher, sender_key, user, other_user):
         """Test /whois shows role."""
-        response = await dispatcher.dispatch("/whois OtherUser", sender_key)
+        response = await dispatcher.dispatch("!whois OtherUser", sender_key)
         assert "Ruolo: Utente" in response
 
     @pytest.mark.asyncio
@@ -460,7 +460,7 @@ class TestWhoisCommand:
         other_user.is_admin = True
         db_session.commit()
 
-        response = await dispatcher.dispatch("/whois OtherUser", sender_key)
+        response = await dispatcher.dispatch("!whois OtherUser", sender_key)
         assert "Ruolo: Admin" in response
 
     @pytest.mark.asyncio
@@ -469,19 +469,19 @@ class TestWhoisCommand:
         other_user.is_moderator = True
         db_session.commit()
 
-        response = await dispatcher.dispatch("/whois OtherUser", sender_key)
+        response = await dispatcher.dispatch("!whois OtherUser", sender_key)
         assert "Ruolo: Moderatore" in response
 
     @pytest.mark.asyncio
     async def test_whois_shows_registration_date(self, dispatcher, sender_key, user, other_user):
         """Test /whois shows registration date."""
-        response = await dispatcher.dispatch("/whois OtherUser", sender_key)
+        response = await dispatcher.dispatch("!whois OtherUser", sender_key)
         assert "Registrato:" in response
 
     @pytest.mark.asyncio
     async def test_whois_shows_last_seen(self, dispatcher, sender_key, user, other_user):
         """Test /whois shows last seen."""
-        response = await dispatcher.dispatch("/whois OtherUser", sender_key)
+        response = await dispatcher.dispatch("!whois OtherUser", sender_key)
         assert "Ultimo accesso:" in response
 
     @pytest.mark.asyncio
@@ -496,7 +496,7 @@ class TestWhoisCommand:
             ))
         db_session.commit()
 
-        response = await dispatcher.dispatch("/whois OtherUser", sender_key)
+        response = await dispatcher.dispatch("!whois OtherUser", sender_key)
         assert "Messaggi: 5" in response
 
     @pytest.mark.asyncio
@@ -505,7 +505,7 @@ class TestWhoisCommand:
         other_user.ban("Test reason")
         db_session.commit()
 
-        response = await dispatcher.dispatch("/whois OtherUser", sender_key)
+        response = await dispatcher.dispatch("!whois OtherUser", sender_key)
         assert "BANNATO" in response
 
     @pytest.mark.asyncio
@@ -514,7 +514,7 @@ class TestWhoisCommand:
         other_user.mute("Test reason")
         db_session.commit()
 
-        response = await dispatcher.dispatch("/whois OtherUser", sender_key)
+        response = await dispatcher.dispatch("!whois OtherUser", sender_key)
         assert "Silenziato" in response
 
     @pytest.mark.asyncio
@@ -523,13 +523,13 @@ class TestWhoisCommand:
         other_user.kick(30, "Test reason")
         db_session.commit()
 
-        response = await dispatcher.dispatch("/whois OtherUser", sender_key)
+        response = await dispatcher.dispatch("!whois OtherUser", sender_key)
         assert "Kick" in response
 
     @pytest.mark.asyncio
     async def test_whois_shows_public_key(self, dispatcher, sender_key, user, other_user, other_key):
         """Test /whois shows truncated public key."""
-        response = await dispatcher.dispatch("/whois OtherUser", sender_key)
+        response = await dispatcher.dispatch("!whois OtherUser", sender_key)
         assert "Chiave:" in response
         assert other_key[:16] in response
 
@@ -548,7 +548,7 @@ class TestWhoisCommand:
     @pytest.mark.asyncio
     async def test_whois_self(self, dispatcher, sender_key, user):
         """Test /whois on self."""
-        response = await dispatcher.dispatch("/whois TestUser", sender_key)
+        response = await dispatcher.dispatch("!whois TestUser", sender_key)
         assert "Profilo: TestUser" in response
 
 
@@ -563,7 +563,7 @@ class TestUtilityWorkflow:
     async def test_full_pm_workflow(self, db_session, dispatcher, sender_key, user, other_user):
         """Test sending, reading, and deleting PM."""
         # Send a PM (using msg command)
-        response = await dispatcher.dispatch("/msg OtherUser Ciao!", sender_key)
+        response = await dispatcher.dispatch("!msg OtherUser Ciao!", sender_key)
         assert "inviato" in response
 
         # Get PM count for sender
@@ -572,7 +572,7 @@ class TestUtilityWorkflow:
         assert pm is not None
 
         # Delete the PM
-        response = await dispatcher.dispatch(f"/delpm {pm.id}", sender_key)
+        response = await dispatcher.dispatch(f"!delpm {pm.id}", sender_key)
         assert "eliminato" in response
 
         # Verify it's gone
@@ -584,8 +584,8 @@ class TestUtilityWorkflow:
         """Test stats reflect real activity."""
         # Post some messages
         for i in range(5):
-            await dispatcher.dispatch(f"/post #generale Message {i}", sender_key)
+            await dispatcher.dispatch(f"!post #generale Message {i}", sender_key)
 
         # Check stats
-        response = await dispatcher.dispatch("/stats", sender_key)
+        response = await dispatcher.dispatch("!stats", sender_key)
         assert "5 totali" in response or "Messaggi:" in response

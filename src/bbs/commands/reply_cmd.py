@@ -22,7 +22,7 @@ class ReplyCommand(BaseCommand):
 
     name = "reply"
     description = "Rispondi a un messaggio"
-    usage = "/reply <id> <messaggio>"
+    usage = "!reply <id> <messaggio>"
     aliases = ["re"]
 
     MAX_MESSAGE_LENGTH = 200
@@ -48,8 +48,8 @@ class ReplyCommand(BaseCommand):
         # Check arguments
         if len(args) < 2:
             return CommandResult.fail(
-                "[BBS] Uso: /reply <id> <messaggio>\n"
-                "Esempio: /reply 42 Sono d'accordo!"
+                "[BBS] Uso: !reply <id> <messaggio>\n"
+                "Esempio: !reply 42 Sono d'accordo!"
             )
 
         # Parse message ID

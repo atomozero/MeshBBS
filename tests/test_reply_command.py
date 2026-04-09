@@ -21,25 +21,25 @@ class TestReplyCommand:
     async def test_reply_no_args(self, db_session: Session, test_sender_key: str):
         """Test /reply without arguments shows usage."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/reply", test_sender_key)
+        response = await dispatcher.dispatch("!reply", test_sender_key)
 
         assert response is not None
-        assert "uso" in response.lower() or "/reply" in response.lower()
+        assert "uso" in response.lower() or "!reply" in response.lower()
 
     @pytest.mark.asyncio
     async def test_reply_no_message(self, db_session: Session, test_sender_key: str):
         """Test /reply with only ID shows usage."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/reply 1", test_sender_key)
+        response = await dispatcher.dispatch("!reply 1", test_sender_key)
 
         assert response is not None
-        assert "uso" in response.lower() or "/reply" in response.lower()
+        assert "uso" in response.lower() or "!reply" in response.lower()
 
     @pytest.mark.asyncio
     async def test_reply_invalid_id(self, db_session: Session, test_sender_key: str):
         """Test /reply with invalid ID."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/reply abc Hello", test_sender_key)
+        response = await dispatcher.dispatch("!reply abc Hello", test_sender_key)
 
         assert response is not None
         assert "non valido" in response.lower()
@@ -48,7 +48,7 @@ class TestReplyCommand:
     async def test_reply_message_not_found(self, db_session: Session, test_sender_key: str):
         """Test /reply to non-existent message."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/reply 99999 Hello", test_sender_key)
+        response = await dispatcher.dispatch("!reply 99999 Hello", test_sender_key)
 
         assert response is not None
         assert "non trovato" in response.lower()
@@ -76,7 +76,7 @@ class TestReplyCommand:
         # Reply to the message
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch(
-            f"/reply {original_msg.id} I agree with you!", test_sender_key
+            f"!reply {original_msg.id} I agree with you!", test_sender_key
         )
 
         assert response is not None
@@ -114,7 +114,7 @@ class TestReplyCommand:
 
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch(
-            f"/reply #{original_msg.id} Reply text", test_sender_key
+            f"!reply #{original_msg.id} Reply text", test_sender_key
         )
 
         assert response is not None
@@ -141,7 +141,7 @@ class TestReplyCommand:
         dispatcher = CommandDispatcher(session=db_session)
         long_reply = "x" * 250
         response = await dispatcher.dispatch(
-            f"/reply {original_msg.id} {long_reply}", test_sender_key
+            f"!reply {original_msg.id} {long_reply}", test_sender_key
         )
 
         assert response is not None
@@ -168,7 +168,7 @@ class TestReplyCommand:
 
         dispatcher = CommandDispatcher(session=db_session)
         await dispatcher.dispatch(
-            f"/reply {original_msg.id} Tech reply", test_sender_key
+            f"!reply {original_msg.id} Tech reply", test_sender_key
         )
 
         # Verify reply is in tech area
@@ -226,7 +226,7 @@ class TestReplyCommand:
 
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch(
-            f"/reply {original_msg.id} My reply", test_sender_key
+            f"!reply {original_msg.id} My reply", test_sender_key
         )
 
         assert response is not None
@@ -256,7 +256,7 @@ class TestReplyCommand:
         # First reply
         dispatcher = CommandDispatcher(session=db_session)
         await dispatcher.dispatch(
-            f"/reply {original.id} First reply", test_sender_key
+            f"!reply {original.id} First reply", test_sender_key
         )
         db_session.commit()
 
@@ -269,7 +269,7 @@ class TestReplyCommand:
 
         # Reply to the reply
         response = await dispatcher.dispatch(
-            f"/reply {first_reply.id} Nested reply", test_sender_key_2
+            f"!reply {first_reply.id} Nested reply", test_sender_key_2
         )
         db_session.commit()
 
@@ -321,7 +321,7 @@ class TestReadCommandWithReplies:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch(f"/read {original.id}", test_sender_key)
+        response = await dispatcher.dispatch(f"!read {original.id}", test_sender_key)
 
         assert response is not None
         assert "3 risposte" in response
@@ -356,7 +356,7 @@ class TestReadCommandWithReplies:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch(f"/read {reply.id}", test_sender_key)
+        response = await dispatcher.dispatch(f"!read {reply.id}", test_sender_key)
 
         assert response is not None
         assert f"re: #{parent.id}" in response.lower() or "parentauthor" in response.lower()
@@ -380,10 +380,10 @@ class TestReadCommandWithReplies:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch(f"/read {msg.id}", test_sender_key)
+        response = await dispatcher.dispatch(f"!read {msg.id}", test_sender_key)
 
         assert response is not None
-        assert f"/reply {msg.id}" in response
+        assert f"!reply {msg.id}" in response
 
 
 class TestMessageThreading:

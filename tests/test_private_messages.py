@@ -20,7 +20,7 @@ class TestMsgCommand:
     async def test_msg_no_args(self, db_session: Session, test_sender_key: str):
         """Test /msg without arguments shows usage."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/msg", test_sender_key)
+        response = await dispatcher.dispatch("!msg", test_sender_key)
 
         assert response is not None
         assert "uso" in response.lower() or "usage" in response.lower()
@@ -29,7 +29,7 @@ class TestMsgCommand:
     async def test_msg_no_message(self, db_session: Session, test_sender_key: str):
         """Test /msg with only recipient shows usage."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/msg someone", test_sender_key)
+        response = await dispatcher.dispatch("!msg someone", test_sender_key)
 
         assert response is not None
         assert "uso" in response.lower() or "usage" in response.lower()
@@ -38,7 +38,7 @@ class TestMsgCommand:
     async def test_msg_user_not_found(self, db_session: Session, test_sender_key: str):
         """Test /msg to non-existent user."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/msg nonexistent Hello!", test_sender_key)
+        response = await dispatcher.dispatch("!msg nonexistent Hello!", test_sender_key)
 
         assert response is not None
         assert "non trovato" in response.lower()
@@ -54,7 +54,7 @@ class TestMsgCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/msg Mario Ciao come stai?", test_sender_key)
+        response = await dispatcher.dispatch("!msg Mario Ciao come stai?", test_sender_key)
 
         assert response is not None
         assert "inviato" in response.lower()
@@ -79,7 +79,7 @@ class TestMsgCommand:
         dispatcher = CommandDispatcher(session=db_session)
         # Use first 8 chars of key
         response = await dispatcher.dispatch(
-            f"/msg {test_sender_key_2[:8]} Hello there!", test_sender_key
+            f"!msg {test_sender_key_2[:8]} Hello there!", test_sender_key
         )
 
         assert response is not None
@@ -96,7 +96,7 @@ class TestMsgCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/msg Myself Hello me!", test_sender_key)
+        response = await dispatcher.dispatch("!msg Myself Hello me!", test_sender_key)
 
         assert response is not None
         assert "te stesso" in response.lower()
@@ -112,7 +112,7 @@ class TestMsgCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/msg Banned Hello!", test_sender_key)
+        response = await dispatcher.dispatch("!msg Banned Hello!", test_sender_key)
 
         assert response is not None
         assert "impossibile" in response.lower()
@@ -128,7 +128,7 @@ class TestMsgCommand:
 
         dispatcher = CommandDispatcher(session=db_session)
         long_message = "x" * 250
-        response = await dispatcher.dispatch(f"/msg Mario {long_message}", test_sender_key)
+        response = await dispatcher.dispatch(f"!msg Mario {long_message}", test_sender_key)
 
         assert response is not None
         assert "troppo lungo" in response.lower()
@@ -164,7 +164,7 @@ class TestInboxCommand:
     async def test_inbox_empty(self, db_session: Session, test_sender_key: str):
         """Test /inbox with no messages."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/inbox", test_sender_key)
+        response = await dispatcher.dispatch("!inbox", test_sender_key)
 
         assert response is not None
         assert "nessun" in response.lower()
@@ -193,7 +193,7 @@ class TestInboxCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/inbox", test_sender_key)
+        response = await dispatcher.dispatch("!inbox", test_sender_key)
 
         assert response is not None
         assert "Sender" in response
@@ -215,7 +215,7 @@ class TestInboxCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/inbox", test_sender_key)
+        response = await dispatcher.dispatch("!inbox", test_sender_key)
 
         assert response is not None
         assert "2" in response  # 2 unread
@@ -236,7 +236,7 @@ class TestInboxCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/inbox 2", test_sender_key)
+        response = await dispatcher.dispatch("!inbox 2", test_sender_key)
 
         assert response is not None
         # Should show only 2 messages
@@ -245,7 +245,7 @@ class TestInboxCommand:
     async def test_inbox_invalid_limit(self, db_session: Session, test_sender_key: str):
         """Test /inbox with invalid limit."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/inbox abc", test_sender_key)
+        response = await dispatcher.dispatch("!inbox abc", test_sender_key)
 
         assert response is not None
         assert "uso" in response.lower()
@@ -269,7 +269,7 @@ class TestReadPmCommand:
     async def test_readpm_no_args(self, db_session: Session, test_sender_key: str):
         """Test /readpm without arguments."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/readpm", test_sender_key)
+        response = await dispatcher.dispatch("!readpm", test_sender_key)
 
         assert response is not None
         assert "uso" in response.lower()
@@ -278,7 +278,7 @@ class TestReadPmCommand:
     async def test_readpm_invalid_id(self, db_session: Session, test_sender_key: str):
         """Test /readpm with invalid ID."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/readpm abc", test_sender_key)
+        response = await dispatcher.dispatch("!readpm abc", test_sender_key)
 
         assert response is not None
         assert "non valido" in response.lower()
@@ -287,7 +287,7 @@ class TestReadPmCommand:
     async def test_readpm_not_found(self, db_session: Session, test_sender_key: str):
         """Test /readpm with non-existent message."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/readpm 99999", test_sender_key)
+        response = await dispatcher.dispatch("!readpm 99999", test_sender_key)
 
         assert response is not None
         assert "non trovato" in response.lower()
@@ -309,7 +309,7 @@ class TestReadPmCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch(f"/readpm {msg.id}", test_sender_key)
+        response = await dispatcher.dispatch(f"!readpm {msg.id}", test_sender_key)
 
         assert response is not None
         assert "Secret message content" in response
@@ -332,7 +332,7 @@ class TestReadPmCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch(f"/readpm {msg.id}", test_sender_key)
+        response = await dispatcher.dispatch(f"!readpm {msg.id}", test_sender_key)
 
         assert response is not None
         assert "My sent message" in response
@@ -356,7 +356,7 @@ class TestReadPmCommand:
         assert not msg.is_read
 
         dispatcher = CommandDispatcher(session=db_session)
-        await dispatcher.dispatch(f"/readpm {msg.id}", test_sender_key)
+        await dispatcher.dispatch(f"!readpm {msg.id}", test_sender_key)
 
         # Refresh from DB
         db_session.refresh(msg)
@@ -378,7 +378,7 @@ class TestReadPmCommand:
 
         # Try to read as third party
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch(f"/readpm {msg.id}", test_sender_key)
+        response = await dispatcher.dispatch(f"!readpm {msg.id}", test_sender_key)
 
         assert response is not None
         assert "non trovato" in response.lower()

@@ -20,7 +20,7 @@ class TestSearchCommand:
     async def test_search_no_args(self, db_session: Session, test_sender_key: str):
         """Test /search without arguments shows usage."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/search", test_sender_key)
+        response = await dispatcher.dispatch("!search", test_sender_key)
 
         assert response is not None
         assert "uso" in response.lower()
@@ -29,7 +29,7 @@ class TestSearchCommand:
     async def test_search_query_too_short(self, db_session: Session, test_sender_key: str):
         """Test /search with too short query."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/search a", test_sender_key)
+        response = await dispatcher.dispatch("!search a", test_sender_key)
 
         assert response is not None
         assert "troppo corto" in response.lower()
@@ -40,7 +40,7 @@ class TestSearchCommand:
     ):
         """Test /search with no matching messages."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/search xyznonexistent", test_sender_key)
+        response = await dispatcher.dispatch("!search xyznonexistent", test_sender_key)
 
         assert response is not None
         assert "nessun risultato" in response.lower()
@@ -63,7 +63,7 @@ class TestSearchCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/search hello", test_sender_key)
+        response = await dispatcher.dispatch("!search hello", test_sender_key)
 
         assert response is not None
         assert "2 risultati" in response.lower()
@@ -84,7 +84,7 @@ class TestSearchCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/search important", test_sender_key)
+        response = await dispatcher.dispatch("!search important", test_sender_key)
 
         assert response is not None
         assert "1 risultati" in response or "risultat" in response.lower()
@@ -110,7 +110,7 @@ class TestSearchCommand:
         dispatcher = CommandDispatcher(session=db_session)
 
         # Search in tech only
-        response = await dispatcher.dispatch("/search #tech python", test_sender_key)
+        response = await dispatcher.dispatch("!search #tech python", test_sender_key)
 
         assert response is not None
         assert "1 risultati" in response or "risultat" in response.lower()
@@ -122,7 +122,7 @@ class TestSearchCommand:
     ):
         """Test /search with non-existent area."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/search #nonexistent test", test_sender_key)
+        response = await dispatcher.dispatch("!search #nonexistent test", test_sender_key)
 
         assert response is not None
         assert "non trovata" in response.lower()
@@ -142,7 +142,7 @@ class TestSearchCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/search searchable", test_sender_key)
+        response = await dispatcher.dispatch("!search searchable", test_sender_key)
 
         assert response is not None
         assert "AuthorNick" in response
@@ -162,7 +162,7 @@ class TestSearchCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/search find", test_sender_key)
+        response = await dispatcher.dispatch("!search find", test_sender_key)
 
         assert response is not None
         assert f"#{msg.id}" in response
@@ -182,7 +182,7 @@ class TestSearchCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/search technical", test_sender_key)
+        response = await dispatcher.dispatch("!search technical", test_sender_key)
 
         assert response is not None
         assert "[tech]" in response.lower()
@@ -202,10 +202,10 @@ class TestSearchCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/search test", test_sender_key)
+        response = await dispatcher.dispatch("!search test", test_sender_key)
 
         assert response is not None
-        assert "/read" in response.lower()
+        assert "!read" in response.lower()
 
     @pytest.mark.asyncio
     async def test_search_alias_find(
@@ -262,7 +262,7 @@ class TestSearchCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/search quick brown", test_sender_key)
+        response = await dispatcher.dispatch("!search quick brown", test_sender_key)
 
         assert response is not None
         # Should find the message with "quick brown" in it
@@ -284,7 +284,7 @@ class TestSearchCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/search FINDME", test_sender_key)
+        response = await dispatcher.dispatch("!search FINDME", test_sender_key)
 
         assert response is not None
         assert "risultat" in response.lower()
@@ -301,7 +301,7 @@ class TestSearchNoResultsMessages:
     ):
         """Test no results message mentions area."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/search #tech xyznotfound", test_sender_key)
+        response = await dispatcher.dispatch("!search #tech xyznotfound", test_sender_key)
 
         assert response is not None
         assert "nessun risultato" in response.lower()
@@ -313,7 +313,7 @@ class TestSearchNoResultsMessages:
     ):
         """Test no results message for global search."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/search xyznotfound", test_sender_key)
+        response = await dispatcher.dispatch("!search xyznotfound", test_sender_key)
 
         assert response is not None
         assert "nessun risultato" in response.lower()

@@ -28,7 +28,7 @@ class DelPmCommand(BaseCommand):
 
     name = "delpm"
     description = "Elimina un messaggio privato"
-    usage = "/delpm <id>"
+    usage = "!delpm <id>"
     aliases = ["deletepm", "rmpm"]
     admin_only = False
 
@@ -51,7 +51,7 @@ class DelPmCommand(BaseCommand):
         """
         if not args:
             return CommandResult.fail(
-                "[BBS] Uso: /delpm <id>\n"
+                "[BBS] Uso: !delpm <id>\n"
                 "Elimina un messaggio dalla tua inbox"
             )
 
@@ -91,7 +91,7 @@ class ClearInboxCommand(BaseCommand):
 
     name = "clear"
     description = "Marca tutti i PM come letti"
-    usage = "/clear"
+    usage = "!clear"
     aliases = ["readall", "markread"]
     admin_only = False
 
@@ -141,7 +141,7 @@ class StatsCommand(BaseCommand):
 
     name = "stats"
     description = "Mostra statistiche BBS"
-    usage = "/stats"
+    usage = "!stats"
     aliases = ["statistics", "stat"]
     admin_only = False
 
@@ -212,7 +212,7 @@ class InfoCommand(BaseCommand):
 
     name = "info"
     description = "Informazioni sul BBS"
-    usage = "/info"
+    usage = "!info"
     aliases = ["about", "version"]
     admin_only = False
 
@@ -260,7 +260,7 @@ class WhoisCommand(BaseCommand):
 
     name = "whois"
     description = "Info su un utente"
-    usage = "/whois <utente>"
+    usage = "!whois <utente>"
     aliases = ["user", "profile"]
     admin_only = False
 
@@ -283,7 +283,7 @@ class WhoisCommand(BaseCommand):
         """
         if not args:
             return CommandResult.fail(
-                "[BBS] Uso: /whois <utente>\n"
+                "[BBS] Uso: !whois <utente>\n"
                 "Cerca per nickname o chiave pubblica"
             )
 

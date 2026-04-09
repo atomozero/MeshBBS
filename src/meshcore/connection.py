@@ -1055,7 +1055,7 @@ class TCPMeshCoreConnection(BaseMeshCoreConnection):
     def __init__(
         self,
         host: str = "192.168.1.100",
-        port: int = 4403,
+        port: int = 5000,
         timeout: float = 30.0,
         use_mock_fallback: bool = True,
         debug: bool = False,

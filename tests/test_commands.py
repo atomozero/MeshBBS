@@ -21,7 +21,7 @@ class TestHelpCommand:
     async def test_help_lists_commands(self, db_session: Session, test_sender_key: str):
         """Test that /help lists available commands."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/help", test_sender_key)
+        response = await dispatcher.dispatch("!help", test_sender_key)
 
         assert response is not None
         assert "help" in response.lower()
@@ -32,7 +32,7 @@ class TestHelpCommand:
     async def test_help_specific_command(self, db_session: Session, test_sender_key: str):
         """Test /help with specific command."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/help post", test_sender_key)
+        response = await dispatcher.dispatch("!help post", test_sender_key)
 
         assert response is not None
         assert "post" in response.lower()
@@ -46,7 +46,7 @@ class TestAreasCommand:
     async def test_areas_lists_default(self, db_session: Session, test_sender_key: str):
         """Test /areas lists default areas."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/areas", test_sender_key)
+        response = await dispatcher.dispatch("!areas", test_sender_key)
 
         assert response is not None
         # Check for default areas created by init_database
@@ -58,7 +58,7 @@ class TestAreasCommand:
     ):
         """Test /areas lists all configured areas."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/areas", test_sender_key)
+        response = await dispatcher.dispatch("!areas", test_sender_key)
 
         assert response is not None
         # Sample areas come from init_database defaults
@@ -80,7 +80,7 @@ class TestPostCommand:
         """Test /post creates a new message."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch(
-            "/post Hello from test!", test_sender_key
+            "!post Hello from test!", test_sender_key
         )
 
         assert response is not None
@@ -98,7 +98,7 @@ class TestPostCommand:
     ):
         """Test /post without message content."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/post", test_sender_key)
+        response = await dispatcher.dispatch("!post", test_sender_key)
 
         assert response is not None
         # Should show usage or error
@@ -116,7 +116,7 @@ class TestListCommand:
         """Test /list on empty area."""
         area = sample_areas[0]
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch(f"/list {area.name}", test_sender_key)
+        response = await dispatcher.dispatch(f"!list {area.name}", test_sender_key)
 
         assert response is not None
         # Should indicate no messages or show empty list
@@ -143,7 +143,7 @@ class TestListCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch(f"/list {area.name}", test_sender_key)
+        response = await dispatcher.dispatch(f"!list {area.name}", test_sender_key)
 
         assert response is not None
         # Should show the message ID or preview
@@ -174,7 +174,7 @@ class TestReadCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch(f"/read {message.id}", test_sender_key)
+        response = await dispatcher.dispatch(f"!read {message.id}", test_sender_key)
 
         assert response is not None
         assert "full message content" in response.lower()
@@ -185,7 +185,7 @@ class TestReadCommand:
     ):
         """Test /read with invalid message ID."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/read 99999", test_sender_key)
+        response = await dispatcher.dispatch("!read 99999", test_sender_key)
 
         assert response is not None
         response_lower = response.lower()
@@ -199,7 +199,7 @@ class TestNickCommand:
     async def test_nick_sets_nickname(self, db_session: Session, test_sender_key: str):
         """Test /nick sets user nickname."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/nick TestUser", test_sender_key)
+        response = await dispatcher.dispatch("!nick TestUser", test_sender_key)
 
         assert response is not None
         response_lower = response.lower()
@@ -215,10 +215,10 @@ class TestNickCommand:
         """Test /nick updates existing nickname."""
         # First set a nickname
         dispatcher = CommandDispatcher(session=db_session)
-        await dispatcher.dispatch("/nick OldNick", test_sender_key)
+        await dispatcher.dispatch("!nick OldNick", test_sender_key)
 
         # Then update it
-        response = await dispatcher.dispatch("/nick NewNick", test_sender_key)
+        response = await dispatcher.dispatch("!nick NewNick", test_sender_key)
 
         assert response is not None
 
@@ -242,7 +242,7 @@ class TestDispatcher:
     async def test_unknown_command(self, db_session: Session, test_sender_key: str):
         """Test unknown command returns error."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/unknowncmd", test_sender_key)
+        response = await dispatcher.dispatch("!unknowncmd", test_sender_key)
 
         assert response is not None
         response_lower = response.lower()
@@ -252,7 +252,7 @@ class TestDispatcher:
     async def test_response_prefix(self, db_session: Session, test_sender_key: str):
         """Test response prefix is applied."""
         dispatcher = CommandDispatcher(session=db_session, response_prefix="[BBS] ")
-        response = await dispatcher.dispatch("/help", test_sender_key)
+        response = await dispatcher.dispatch("!help", test_sender_key)
 
         assert response is not None
         assert response.startswith("[BBS] ")

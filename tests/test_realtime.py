@@ -135,7 +135,7 @@ class TestCoreWSIntegration:
 
         msg = Message(
             sender_key="A" * 64,
-            text="/help",
+            text="!help",
             hops=2,
             rssi=-85,
         )
@@ -160,7 +160,7 @@ class TestCoreWSIntegration:
         mock_manager.connection_count = 0
         mock_manager.broadcast_message_event = AsyncMock()
 
-        msg = Message(sender_key="A" * 64, text="/help")
+        msg = Message(sender_key="A" * 64, text="!help")
 
         with patch("web.websocket.manager.get_connection_manager", return_value=mock_manager):
             await bbs._ws_notify_message(msg)

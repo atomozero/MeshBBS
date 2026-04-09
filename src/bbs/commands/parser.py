@@ -17,7 +17,7 @@ class ParsedCommand:
     Contains the extracted command name and arguments.
     """
 
-    command: str  # Command name without /
+    command: str  # Command name without !
     args: List[str]  # Arguments as list
     raw_args: str  # Arguments as single string
     is_valid: bool = True
@@ -47,7 +47,7 @@ def parse_command(message: str) -> Optional[ParsedCommand]:
     """
     Parse a message to extract command and arguments.
 
-    Commands must start with / followed by the command name.
+    Commands must start with ! followed by the command name.
     Arguments are space-separated, but quoted strings are kept together.
 
     Args:
@@ -57,10 +57,10 @@ def parse_command(message: str) -> Optional[ParsedCommand]:
         ParsedCommand if message is a command, None otherwise
 
     Examples:
-        >>> parse_command("/help")
+        >>> parse_command("!help")
         ParsedCommand(command='help', args=[], raw_args='')
 
-        >>> parse_command("/post Hello world!")
+        >>> parse_command("!post Hello world!")
         ParsedCommand(command='post', args=['Hello', 'world!'], raw_args='Hello world!')
 
         >>> parse_command("Hello")
@@ -71,11 +71,11 @@ def parse_command(message: str) -> Optional[ParsedCommand]:
 
     message = message.strip()
 
-    # Commands must start with /
-    if not message.startswith("/"):
+    # Commands must start with !
+    if not message.startswith("!"):
         return None
 
-    # Remove leading /
+    # Remove leading !
     message = message[1:]
 
     if not message:
@@ -158,6 +158,6 @@ def is_command(message: str) -> bool:
         message: Message to check
 
     Returns:
-        True if message starts with /
+        True if message starts with !
     """
-    return bool(message and message.strip().startswith("/"))
+    return bool(message and message.strip().startswith("!"))

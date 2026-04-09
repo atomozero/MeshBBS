@@ -17,7 +17,7 @@ class HelpCommand(BaseCommand):
 
     name = "help"
     description = "Mostra i comandi disponibili"
-    usage = "/help [comando]"
+    usage = "!help [comando]"
     aliases = ["h", "?"]
 
     def __init__(self, session: Session):
@@ -54,5 +54,5 @@ class HelpCommand(BaseCommand):
 
         return CommandResult.ok(
             f"[BBS] Comandi: {cmd_list}\n"
-            f"Usa /help <cmd> per dettagli"
+            f"Usa !help <cmd> per dettagli"
         )

@@ -71,7 +71,7 @@ class TestPluginState:
 class TestCommand(BaseCommand):
     name = "testcmd"
     description = "Test command"
-    usage = "/testcmd"
+    usage = "!testcmd"
     aliases = ["tc"]
 
     def __init__(self, session=None):
