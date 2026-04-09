@@ -1,0 +1,12 @@
+# MeshBBS Light Dependencies
+# For Raspberry Pi Zero and other constrained devices.
+# No compiled dependencies, no Node.js required.
+
+# Database
+SQLAlchemy>=2.0.0
+
+# MeshCore radio communication
+meshcore>=0.1.0
+
+# MQTT integration (optional, comment out if not needed)
+# paho-mqtt>=2.0.0

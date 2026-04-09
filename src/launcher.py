@@ -97,17 +97,14 @@ Examples:
 
 
 async def run_web_server(host: str, port: int, debug: bool):
-    """Run the FastAPI web server using uvicorn in async mode."""
-    import uvicorn
+    """Run the lightweight bottle web server in a background thread."""
+    from web_light.server import start_server
 
-    config = uvicorn.Config(
-        "web.main:app",
-        host=host,
-        port=port,
-        log_level="info" if debug else "warning",
-    )
-    server = uvicorn.Server(config)
-    await server.serve()
+    start_server(host=host, port=port, debug=debug)
+
+    # Keep the coroutine alive while the server thread runs
+    while True:
+        await asyncio.sleep(60)
 
 
 async def run_bbs(config: Config):
