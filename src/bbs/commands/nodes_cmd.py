@@ -25,6 +25,7 @@ class NodesCommand(BaseCommand):
     description = "Mostra nodi e ripetitori sulla rete"
     usage = "!nodes"
     aliases = ["repeaters", "mesh"]
+    admin_only = True
 
     def __init__(self, session: Session):
         self.session = session
