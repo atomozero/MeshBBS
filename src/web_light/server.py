@@ -653,6 +653,86 @@ def network_page():
     nodes = _get_mesh_nodes()
     rows = _render_network_rows(nodes)
 
+    # Build nodes JSON for the map
+    geo_nodes = [n for n in nodes if "lat" in n and "lon" in n]
+    nodes_json = json.dumps(geo_nodes)
+
+    # BBS own position from config
+    from utils.config import get_config
+    cfg = get_config()
+    bbs_lat = cfg.latitude or 0
+    bbs_lon = cfg.longitude or 0
+
+    # Determine map center
+    if bbs_lat and bbs_lon:
+        center_lat, center_lon = bbs_lat, bbs_lon
+    elif geo_nodes:
+        center_lat = sum(n["lat"] for n in geo_nodes) / len(geo_nodes)
+        center_lon = sum(n["lon"] for n in geo_nodes) / len(geo_nodes)
+    else:
+        center_lat, center_lon = 45.5, 12.2  # Default: Veneto
+
+    has_map = bool(geo_nodes) or (bbs_lat and bbs_lon)
+
+    map_html = ""
+    if has_map:
+        map_html = f"""
+        <div class="section">
+        <h2>Mappa</h2>
+        <div class="card" style="padding:0;overflow:hidden">
+            <div id="map" style="height:350px;width:100%;border-radius:8px"></div>
+        </div>
+        </div>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script>
+        (function(){{
+            var map = L.map('map').setView([{center_lat},{center_lon}], 11);
+            L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+                attribution: '&copy; OpenStreetMap',
+                maxZoom: 18
+            }}).addTo(map);
+
+            var colors = {{'RPT':'#fbbf24','CLI':'#60a5fa','ROOM':'#4ade80','SENS':'#c084fc'}};
+
+            function makeIcon(color) {{
+                return L.divIcon({{
+                    className: '',
+                    html: '<div style="width:14px;height:14px;border-radius:50%;background:'+color+';border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.5)"></div>',
+                    iconSize: [14,14],
+                    iconAnchor: [7,7]
+                }});
+            }}
+
+            // BBS position
+            var bbsLat = {bbs_lat};
+            var bbsLon = {bbs_lon};
+            if (bbsLat && bbsLon) {{
+                L.marker([bbsLat,bbsLon], {{icon: makeIcon('#ef4444')}})
+                 .addTo(map)
+                 .bindPopup('<b>{cfg.bbs_name}</b><br>BBS');
+            }}
+
+            // Mesh nodes
+            var nodes = {nodes_json};
+            var bounds = [];
+            if (bbsLat && bbsLon) bounds.push([bbsLat,bbsLon]);
+
+            nodes.forEach(function(n) {{
+                var c = colors[n.type] || '#94a3b8';
+                L.marker([n.lat,n.lon], {{icon: makeIcon(c)}})
+                 .addTo(map)
+                 .bindPopup('<b>'+n.name+'</b><br>'+n.type+'<br>'+n.path);
+                bounds.push([n.lat,n.lon]);
+            }});
+
+            if (bounds.length > 1) {{
+                map.fitBounds(bounds, {{padding:[30,30]}});
+            }}
+        }})();
+        </script>
+        """
+
     return page("Rete", f"""
         <h1 style="margin:1rem 0">Rete Mesh
             <span id="live-indicator" class="badge badge-green" style="font-size:0.6rem;vertical-align:middle;opacity:0.5">LIVE</span>
@@ -661,6 +741,7 @@ def network_page():
             <div class="card">
                 <h3>Nodi totali</h3>
                 <div class="value">{len(nodes)}</div>
+                <div class="sub">{len(geo_nodes)} con GPS</div>
             </div>
             <div class="card">
                 <h3>Ripetitori</h3>
@@ -675,6 +756,7 @@ def network_page():
                 <div class="value">{sum(1 for n in nodes if n['type'] == 'ROOM')}</div>
             </div>
         </div>
+        {map_html}
         <div class="card"><div id="live-content">
         <table>
         <tr><th>Nome</th><th>Tipo</th><th>Chiave</th><th>Percorso</th></tr>
@@ -903,12 +985,21 @@ def _get_mesh_nodes():
             if isinstance(pub_key, bytes):
                 pub_key = pub_key.hex()
 
-            nodes.append({
+            node_data = {
                 "name": name,
                 "type": node_type,
                 "key": str(pub_key),
                 "path": path,
-            })
+            }
+
+            # Add GPS coordinates if available
+            lat = info.get("adv_lat")
+            lon = info.get("adv_lon")
+            if lat and lon and lat != 0 and lon != 0:
+                node_data["lat"] = lat
+                node_data["lon"] = lon
+
+            nodes.append(node_data)
 
         # Sort: repeaters first, then by name
         type_order = {"RPT": 0, "ROOM": 1, "CLI": 2, "SENS": 3}
