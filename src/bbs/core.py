@@ -231,43 +231,60 @@ class BBSCore:
 
     async def _send_response(self, destination: str, text: str) -> None:
         """
-        Send a response, chunking multi-line messages with delays.
+        Send a response, chunking to fit LoRa MTU (~180 bytes).
 
-        Long multi-line responses (e.g. from /list) are split and sent
-        one chunk at a time with a configurable delay between sends,
-        to avoid message loss over slow LoRa radio links.
+        Splits by newlines first, then by length if a single chunk
+        exceeds the MTU. Adds delays between chunks.
         """
+        MAX_CHUNK = 160  # safe limit under LoRa MTU
+        delay = self.config.send_delay
+
+        # Split into lines first
         lines = text.split("\n")
 
-        # Single-line responses: send directly
-        if len(lines) <= 2:
+        # Build chunks that fit within MAX_CHUNK
+        chunks = []
+        current = ""
+
+        for line in lines:
+            # If a single line exceeds MAX_CHUNK, split it by words
+            if len(line) > MAX_CHUNK:
+                if current:
+                    chunks.append(current)
+                    current = ""
+                words = line.split(" ")
+                part = ""
+                for word in words:
+                    if part and len(part) + 1 + len(word) > MAX_CHUNK:
+                        chunks.append(part)
+                        part = word
+                    else:
+                        part = f"{part} {word}" if part else word
+                if part:
+                    chunks.append(part)
+                continue
+
+            # Try adding to current chunk
+            candidate = f"{current}\n{line}" if current else line
+            if len(candidate) > MAX_CHUNK:
+                # Current chunk is full, start new one
+                chunks.append(current)
+                current = line
+            else:
+                current = candidate
+
+        if current:
+            chunks.append(current)
+
+        # Send chunks with delay
+        for i, chunk in enumerate(chunks):
             await self.connection.send_message(
                 destination=destination,
-                text=text,
+                text=chunk,
             )
-            return
-
-        # Multi-line responses: send in chunks with delay
-        # First line is usually the header (e.g. "[BBS]"), group it with the first content line
-        delay = self.config.send_delay
-        chunk_lines = []
-
-        for i, line in enumerate(lines):
-            chunk_lines.append(line)
-
-            # Send chunks of 2 lines at a time (header+content or content pairs)
-            if len(chunk_lines) >= 2 or i == len(lines) - 1:
-                chunk = "\n".join(chunk_lines)
-                success = await self.connection.send_message(
-                    destination=destination,
-                    text=chunk,
-                )
-                chunk_lines = []
-
-                # Wait between chunks (but not after the last one)
-                if success and i < len(lines) - 1:
-                    logger.debug(f"Chunk sent, waiting {delay}s before next")
-                    await asyncio.sleep(delay)
+            if i < len(chunks) - 1:
+                logger.debug(f"Chunk {i+1}/{len(chunks)} sent, waiting {delay}s")
+                await asyncio.sleep(delay)
 
     async def _ws_notify_message(self, message: Message) -> None:
         """Notify WebSocket clients about a new incoming message."""
