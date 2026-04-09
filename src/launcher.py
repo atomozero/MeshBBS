@@ -30,9 +30,16 @@ sys.path.insert(0, str(Path(__file__).parent))
 # can find it without name conflicts.
 try:
     import importlib.util, site
-    for _sp in (site.getsitepackages() if hasattr(site, 'getsitepackages') else []) + sys.path:
-        _mc_init = os.path.join(_sp, 'meshcore', '__init__.py') if 'site-packages' in _sp or 'dist-packages' in _sp else ''
-        if _mc_init and os.path.exists(_mc_init):
+
+    _search_paths = site.getsitepackages() if hasattr(site, 'getsitepackages') else []
+    # Also add any site-packages from sys.path
+    for _p in sys.path:
+        if ('site-packages' in _p or 'dist-packages' in _p) and _p not in _search_paths:
+            _search_paths.append(_p)
+
+    for _sp in _search_paths:
+        _mc_init = os.path.join(_sp, 'meshcore', '__init__.py')
+        if os.path.exists(_mc_init):
             _spec = importlib.util.spec_from_file_location(
                 "meshcore_pip", _mc_init,
                 submodule_search_locations=[os.path.join(_sp, 'meshcore')]
