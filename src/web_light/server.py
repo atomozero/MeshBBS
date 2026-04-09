@@ -741,14 +741,17 @@ def api_send_advert():
     """Send a manual advertisement on the mesh network."""
     response.content_type = "application/json"
     try:
-        from launcher import get_bbs_instance
+        from launcher import get_bbs_instance, get_event_loop
 
         bbs = get_bbs_instance()
+        loop = get_event_loop()
+
         if bbs is None or not bbs._running:
             return json.dumps({"ok": False, "message": "BBS non attivo"})
+        if loop is None:
+            return json.dumps({"ok": False, "message": "Event loop non disponibile"})
 
         import asyncio
-        loop = asyncio.get_event_loop()
         future = asyncio.run_coroutine_threadsafe(
             bbs.connection.send_advert(flood=True), loop
         )

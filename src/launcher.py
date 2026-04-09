@@ -30,13 +30,19 @@ from utils.logger import setup_logger, get_logger
 
 logger = None
 
-# Global reference to BBSCore for API control
+# Global reference to BBSCore and event loop for API control
 _bbs_instance = None
+_event_loop = None
 
 
 def get_bbs_instance():
     """Get the running BBSCore instance (used by web API for control)."""
     return _bbs_instance
+
+
+def get_event_loop():
+    """Get the main asyncio event loop (used by web thread for async calls)."""
+    return _event_loop
 
 
 def parse_args():
@@ -127,7 +133,9 @@ async def run_bbs(config: Config):
 
 async def run_all(args, config: Config):
     """Run BBS and web server concurrently."""
-    global logger
+    global logger, _event_loop
+
+    _event_loop = asyncio.get_running_loop()
 
     tasks = []
 
