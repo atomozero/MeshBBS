@@ -127,7 +127,7 @@ class NewsCommand(BaseCommand):
         return CommandResult.ok("\n".join(lines))
 
     def _detail(self, sender_key: str, index: int) -> CommandResult:
-        """Get detail for a specific news item."""
+        """Get full detail for a specific news item (no title, full summary)."""
         feed_name = _user_last_feed.get(sender_key, DEFAULT_FEED)
         entries = _fetch_news(feed_name)
 
@@ -141,9 +141,9 @@ class NewsCommand(BaseCommand):
 
         title, summary = entries[index - 1]
 
-        lines = [f"[BBS] {title[:150]}"]
-        if summary:
-            # Truncate summary to fit LoRa
-            lines.append(summary[:300])
+        if not summary:
+            return CommandResult.ok(f"[BBS] {title}")
 
-        return CommandResult.ok("\n".join(lines))
+        # Send only the summary (user already read the title)
+        # The core chunker will split into multiple messages if needed
+        return CommandResult.ok(f"[{index}] {summary}")
