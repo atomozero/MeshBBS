@@ -355,6 +355,10 @@ def dashboard():
 
     radio_badge = '<span class="badge badge-green">Connesso</span>' if radio["connected"] else '<span class="badge badge-red">Disconnesso</span>'
 
+    sys_info = stats.get('system', {})
+    uptime_str = _format_uptime(sys_info.get('uptime_seconds', 0))
+    db_size = _format_bytes(sys_info.get('db_size_bytes', 0))
+
     cards = f"""
     <div class="grid">
         <div class="card">
@@ -376,6 +380,11 @@ def dashboard():
             <h3>Radio</h3>
             <div class="value">{radio_badge}</div>
             <div class="sub">{radio.get('messages_processed', 0)} msg processati</div>
+        </div>
+        <div class="card">
+            <h3>Uptime BBS</h3>
+            <div class="value">{uptime_str}</div>
+            <div class="sub">DB: {db_size}</div>
         </div>
     </div>
     """
@@ -563,18 +572,10 @@ def partial_dashboard():
 def partial_messages():
     """Return messages table HTML fragment."""
     messages = _get_recent_messages(25)
-    rows = ""
-    for msg in messages:
-        rows += f"""<tr>
-            <td>#{msg['id']}</td>
-            <td>{esc(msg['author'])}</td>
-            <td>{esc(msg['area'])}</td>
-            <td class="wrap">{esc(msg['body'][:60])}{'...' if len(msg['body']) > 60 else ''}</td>
-            <td>{msg['time']}</td>
-        </tr>"""
+    rows = _render_message_rows(messages)
     return f"""<table>
-    <tr><th>ID</th><th>Autore</th><th>Area</th><th>Messaggio</th><th>Data</th></tr>
-    {rows if rows else '<tr><td colspan="5" style="text-align:center;color:#64748b">Nessun messaggio</td></tr>'}
+    <tr><th>ID</th><th>Autore</th><th>Area</th><th>Messaggio</th><th>Data</th><th></th></tr>
+    {rows if rows else '<tr><td colspan="6" style="text-align:center;color:#64748b">Nessun messaggio</td></tr>'}
     </table>"""
 
 
@@ -617,7 +618,43 @@ def partial_logs():
 @require_auth
 def messages_page():
     messages = _get_recent_messages(25)
+    rows = _render_message_rows(messages)
 
+    return page("Messaggi", f"""
+        <h1 style="margin:1rem 0">Messaggi
+            <span id="live-indicator" class="badge badge-green" style="font-size:0.6rem;vertical-align:middle;opacity:0.5">LIVE</span>
+        </h1>
+        <div id="toast-area"></div>
+        <div class="card"><div id="live-content">
+        <table>
+        <tr><th>ID</th><th>Autore</th><th>Area</th><th>Messaggio</th><th>Data</th><th></th></tr>
+        {rows if rows else '<tr><td colspan="6" style="text-align:center;color:#64748b">Nessun messaggio</td></tr>'}
+        </table>
+        </div></div>
+        <script>
+        function deleteMsg(id) {{
+            if (!confirm('Eliminare messaggio #' + id + '?')) return;
+            fetch('/api/message/' + id, {{method:'DELETE', credentials:'same-origin'}})
+            .then(function(r) {{ return r.json(); }})
+            .then(function(d) {{
+                var ta = document.getElementById('toast-area');
+                var cls = d.ok ? 'toast success' : 'toast error';
+                ta.innerHTML = '<div class="' + cls + '">' + d.message + '</div>';
+                setTimeout(function(){{ ta.innerHTML = ''; }}, 3000);
+                if (d.ok) {{
+                    fetch('/api/partial/messages', {{credentials:'same-origin'}})
+                    .then(function(r){{ return r.text(); }})
+                    .then(function(h){{ document.getElementById('live-content').innerHTML = h; }});
+                }}
+            }})
+            .catch(function(){{ alert('Errore di rete'); }});
+        }}
+        </script>
+    """, active="messages")
+
+
+def _render_message_rows(messages):
+    """Render message table rows with delete button."""
     rows = ""
     for msg in messages:
         rows += f"""<tr>
@@ -626,19 +663,9 @@ def messages_page():
             <td>{esc(msg['area'])}</td>
             <td class="wrap">{esc(msg['body'][:60])}{'...' if len(msg['body']) > 60 else ''}</td>
             <td>{msg['time']}</td>
+            <td class="actions"><button class="btn-sm btn-red" onclick="deleteMsg({msg['id']})">X</button></td>
         </tr>"""
-
-    return page("Messaggi", f"""
-        <h1 style="margin:1rem 0">Messaggi
-            <span id="live-indicator" class="badge badge-green" style="font-size:0.6rem;vertical-align:middle;opacity:0.5">LIVE</span>
-        </h1>
-        <div class="card"><div id="live-content">
-        <table>
-        <tr><th>ID</th><th>Autore</th><th>Area</th><th>Messaggio</th><th>Data</th></tr>
-        {rows if rows else '<tr><td colspan="5" style="text-align:center;color:#64748b">Nessun messaggio</td></tr>'}
-        </table>
-        </div></div>
-    """, active="messages")
+    return rows
 
 
 # ---------------------------------------------------------------
@@ -662,6 +689,17 @@ def users_page():
         {rows if rows else '<tr><td colspan="6" style="text-align:center;color:#64748b">Nessun utente</td></tr>'}
         </table>
         </div></div>
+        <div class="section" id="send-msg-section" style="display:none">
+        <h2>Invia messaggio a <span id="send-msg-name"></span></h2>
+        <div class="card">
+            <input type="hidden" id="send-msg-key">
+            <input type="text" id="send-msg-text" placeholder="Scrivi messaggio..." style="margin-bottom:0.5rem" maxlength="140">
+            <div style="display:flex;gap:0.5rem">
+                <button class="btn-sm btn-blue" style="padding:0.4rem 1rem" onclick="doSendMsg()">Invia</button>
+                <button class="btn-sm btn-red" style="padding:0.4rem 1rem" onclick="cancelSendMsg()">Annulla</button>
+            </div>
+        </div>
+        </div>
         <script>
         function userAction(key, action) {{
             if (!confirm('Confermi ' + action + ' per questo utente?')) return;
@@ -672,10 +710,39 @@ def users_page():
                 var cls = d.ok ? 'toast success' : 'toast error';
                 ta.innerHTML = '<div class="' + cls + '">' + d.message + '</div>';
                 setTimeout(function(){{ ta.innerHTML = ''; }}, 3000);
-                // Refresh user list
                 fetch('/api/partial/users', {{credentials:'same-origin'}})
                 .then(function(r){{ return r.text(); }})
                 .then(function(h){{ document.getElementById('live-content').innerHTML = h; }});
+            }})
+            .catch(function(){{ alert('Errore di rete'); }});
+        }}
+        function showSendMsg(key, name) {{
+            document.getElementById('send-msg-key').value = key;
+            document.getElementById('send-msg-name').textContent = name;
+            document.getElementById('send-msg-text').value = '';
+            document.getElementById('send-msg-section').style.display = 'block';
+            document.getElementById('send-msg-text').focus();
+        }}
+        function cancelSendMsg() {{
+            document.getElementById('send-msg-section').style.display = 'none';
+        }}
+        function doSendMsg() {{
+            var key = document.getElementById('send-msg-key').value;
+            var text = document.getElementById('send-msg-text').value.trim();
+            if (!text) {{ alert('Scrivi un messaggio'); return; }}
+            fetch('/api/send-message', {{
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {{'Content-Type': 'application/json'}},
+                body: JSON.stringify({{recipient_key: key, text: text}})
+            }})
+            .then(function(r) {{ return r.json(); }})
+            .then(function(d) {{
+                var ta = document.getElementById('toast-area');
+                var cls = d.ok ? 'toast success' : 'toast error';
+                ta.innerHTML = '<div class="' + cls + '">' + d.message + '</div>';
+                setTimeout(function(){{ ta.innerHTML = ''; }}, 3000);
+                if (d.ok) cancelSendMsg();
             }})
             .catch(function(){{ alert('Errore di rete'); }});
         }}
@@ -719,6 +786,11 @@ def _render_user_rows(users):
                 f'<button class="btn-sm btn-yellow" onclick="userAction(\'{key}\',\'mute\')">Mute</button>'
                 f'<button class="btn-sm btn-blue" onclick="userAction(\'{key}\',\'kick\')">Kick</button>'
             )
+
+        # Add send message button for all non-banned users
+        name_escaped = esc(u['name']).replace("'", "\\'")
+        if not u.get("banned"):
+            actions += f' <button class="btn-sm btn-blue" onclick="showSendMsg(\'{key}\',\'{name_escaped}\')">Scrivi</button>'
 
         rows += f"""<tr>
             <td>{esc(u['name'])}</td>
@@ -1298,6 +1370,73 @@ def user_action(key, action):
 # API JSON (per integrazioni esterne)
 # ---------------------------------------------------------------
 
+@app.route("/api/send-message", method="POST")
+@require_auth
+def api_send_message():
+    """Send a private message to a mesh node."""
+    response.content_type = "application/json"
+    try:
+        from bbs.runtime import get_bbs_instance, get_event_loop
+        import asyncio
+
+        data = request.json or {}
+        recipient_key = data.get("recipient_key", "").strip()
+        text = data.get("text", "").strip()
+
+        if not recipient_key or not text:
+            return json.dumps({"ok": False, "message": "Destinatario e testo richiesti"})
+
+        if len(text) > 140:
+            return json.dumps({"ok": False, "message": f"Messaggio troppo lungo ({len(text)}/140)"})
+
+        bbs = get_bbs_instance()
+        loop = get_event_loop()
+
+        if not bbs or not bbs._running:
+            return json.dumps({"ok": False, "message": "BBS non attivo"})
+        if not loop:
+            return json.dumps({"ok": False, "message": "Event loop non disponibile"})
+
+        # Send message via the BBS connection
+        future = asyncio.run_coroutine_threadsafe(
+            bbs.connection.send_message(destination=recipient_key, text=text),
+            loop
+        )
+        success = future.result(timeout=15)
+
+        if success:
+            logger.info(f"Message sent to {recipient_key[:8]} via web: {text[:30]}...")
+            return json.dumps({"ok": True, "message": "Messaggio inviato"})
+        else:
+            return json.dumps({"ok": False, "message": "Invio fallito"})
+
+    except Exception as e:
+        return json.dumps({"ok": False, "message": str(e)})
+
+
+@app.route("/api/message/<msg_id:int>", method="DELETE")
+@require_auth
+def api_delete_message(msg_id):
+    """Delete a message by ID."""
+    response.content_type = "application/json"
+    try:
+        from bbs.models.base import get_session
+        from bbs.models.message import Message
+
+        with get_session() as session:
+            msg = session.query(Message).filter_by(id=msg_id).first()
+            if not msg:
+                return json.dumps({"ok": False, "message": f"Messaggio #{msg_id} non trovato"})
+
+            session.delete(msg)
+            session.commit()
+            logger.info(f"Message #{msg_id} deleted via web admin")
+            return json.dumps({"ok": True, "message": f"Messaggio #{msg_id} eliminato"})
+
+    except Exception as e:
+        return json.dumps({"ok": False, "message": str(e)})
+
+
 @app.route("/api/broadcast", method="POST")
 @require_auth
 def api_send_broadcast():
@@ -1638,6 +1777,17 @@ def _get_logs(limit=50):
             } for l in logs]
     except Exception:
         return []
+
+
+def _format_bytes(num_bytes):
+    """Format bytes to human readable string."""
+    if not num_bytes:
+        return "0 B"
+    for unit in ("B", "KB", "MB", "GB"):
+        if num_bytes < 1024:
+            return f"{num_bytes:.1f} {unit}" if unit != "B" else f"{num_bytes} {unit}"
+        num_bytes /= 1024
+    return f"{num_bytes:.1f} TB"
 
 
 def _format_uptime(seconds):

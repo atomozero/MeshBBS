@@ -142,25 +142,94 @@ Esegue azione admin su un utente (richiede autenticazione).
 {"ok": true, "message": "AtomoZero promosso a moderatore"}
 ```
 
-### GET `/api/partial/dashboard`
+### POST `/api/broadcast`
 
-Frammento HTML della dashboard (usato dall'auto-refresh).
+Invia messaggio sul canale pubblico mesh (max 140 caratteri).
 
-### GET `/api/partial/messages`
+**Body:**
+```json
+{"message": "Ciao a tutti dalla BBS!"}
+```
 
-Frammento HTML della tabella messaggi.
+**Risposta:**
+```json
+{"ok": true, "message": "Messaggio inviato sul canale"}
+```
 
-### GET `/api/partial/users`
+### POST `/api/send-message`
 
-Frammento HTML della tabella utenti.
+Invia messaggio privato a un nodo mesh (max 140 caratteri).
 
-### GET `/api/partial/network`
+**Body:**
+```json
+{"recipient_key": "c0686b4c479c...", "text": "Ciao!"}
+```
 
-Frammento HTML della tabella rete.
+**Risposta:**
+```json
+{"ok": true, "message": "Messaggio inviato"}
+```
 
-### GET `/api/partial/logs`
+### DELETE `/api/message/<id>`
 
-Frammento HTML della tabella log.
+Elimina un messaggio dal database.
+
+**Risposta:**
+```json
+{"ok": true, "message": "Messaggio #42 eliminato"}
+```
+
+### POST `/api/settings`
+
+Salva impostazioni BBS.
+
+**Body:**
+```json
+{
+  "bbs_name": "0Bit BBS",
+  "latitude": "45.4986",
+  "send_delay": "5.0",
+  "beacon_interval": "60",
+  "beacon_message": "BBS attivo! !help per info"
+}
+```
+
+**Risposta:**
+```json
+{"ok": true, "message": "5 impostazioni salvate"}
+```
+
+### GET `/api/companion-time`
+
+Legge orologio del companion radio e lo confronta con il server.
+
+**Risposta:**
+```json
+{
+  "ok": true,
+  "companion_time": "14:30:25 UTC",
+  "server_time": "14:30:23 UTC",
+  "diff_seconds": 2
+}
+```
+
+### POST `/api/companion-time/sync`
+
+Sincronizza orologio companion con ora del server Pi.
+
+**Risposta:**
+```json
+{"ok": true, "message": "Orologio sincronizzato: 14:30:25 UTC"}
+```
+
+### GET `/api/partial/*`
+
+Frammenti HTML per auto-refresh (usati internamente):
+- `/api/partial/dashboard`
+- `/api/partial/messages`
+- `/api/partial/users`
+- `/api/partial/network`
+- `/api/partial/logs`
 
 ---
 
