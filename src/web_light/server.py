@@ -380,6 +380,16 @@ def dashboard():
         </h1>
         <div id="toast-area"></div>
         <div id="live-content">{live_content}</div>
+        <div class="section">
+        <h2>Broadcast canale</h2>
+        <div class="card">
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                <input type="text" id="broadcast-msg" placeholder="Scrivi messaggio per il canale pubblico..." style="flex:1;min-width:200px;margin:0">
+                <button class="btn-sm btn-blue" style="padding:0.5rem 1rem;font-size:0.85rem" onclick="sendBroadcast()">Invia</button>
+            </div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:0.4rem">Il messaggio verra inviato sul canale pubblico della rete mesh</div>
+        </div>
+        </div>
         <script>
         function sendAdvert() {{
             fetch('/api/advert', {{method:'POST', credentials:'same-origin'}})
@@ -388,6 +398,26 @@ def dashboard():
                 var ta = document.getElementById('toast-area');
                 var cls = d.ok ? 'toast success' : 'toast error';
                 ta.innerHTML = '<div class="' + cls + '">' + d.message + '</div>';
+                setTimeout(function(){{ ta.innerHTML = ''; }}, 3000);
+            }})
+            .catch(function(){{ alert('Errore di rete'); }});
+        }}
+        function sendBroadcast() {{
+            var msg = document.getElementById('broadcast-msg').value.trim();
+            if (!msg) {{ alert('Scrivi un messaggio'); return; }}
+            if (!confirm('Inviare sul canale pubblico?\\n\\n' + msg)) return;
+            fetch('/api/broadcast', {{
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {{'Content-Type': 'application/json'}},
+                body: JSON.stringify({{message: msg}})
+            }})
+            .then(function(r) {{ return r.json(); }})
+            .then(function(d) {{
+                var ta = document.getElementById('toast-area');
+                var cls = d.ok ? 'toast success' : 'toast error';
+                ta.innerHTML = '<div class="' + cls + '">' + d.message + '</div>';
+                if (d.ok) document.getElementById('broadcast-msg').value = '';
                 setTimeout(function(){{ ta.innerHTML = ''; }}, 3000);
             }})
             .catch(function(){{ alert('Errore di rete'); }});
@@ -1220,6 +1250,48 @@ def user_action(key, action):
 # ---------------------------------------------------------------
 # API JSON (per integrazioni esterne)
 # ---------------------------------------------------------------
+
+@app.route("/api/broadcast", method="POST")
+@require_auth
+def api_send_broadcast():
+    """Send a message on the public channel."""
+    response.content_type = "application/json"
+    try:
+        from bbs.runtime import get_bbs_instance, get_event_loop
+        import asyncio
+
+        data = request.json or {}
+        msg = data.get("message", "").strip()
+
+        if not msg:
+            return json.dumps({"ok": False, "message": "Messaggio vuoto"})
+
+        if len(msg) > 140:
+            return json.dumps({"ok": False, "message": f"Messaggio troppo lungo ({len(msg)}/140)"})
+
+        bbs = get_bbs_instance()
+        loop = get_event_loop()
+
+        if not bbs or not bbs._running:
+            return json.dumps({"ok": False, "message": "BBS non attivo"})
+        if not loop:
+            return json.dumps({"ok": False, "message": "Event loop non disponibile"})
+
+        mc = bbs.connection._meshcore
+        if not mc:
+            return json.dumps({"ok": False, "message": "Radio non connessa"})
+
+        future = asyncio.run_coroutine_threadsafe(
+            mc.commands.send_chan_msg(msg), loop
+        )
+        future.result(timeout=15)
+
+        logger.info(f"Broadcast sent on channel: {msg[:50]}...")
+        return json.dumps({"ok": True, "message": "Messaggio inviato sul canale"})
+
+    except Exception as e:
+        return json.dumps({"ok": False, "message": str(e)})
+
 
 @app.route("/api/advert", method="POST")
 @require_auth

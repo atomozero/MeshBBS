@@ -400,7 +400,7 @@ class BBSCore:
                     try:
                         mc = self.connection._meshcore
                         if mc:
-                            await mc.commands.send_channel_msg(beacon_text)
+                            await mc.commands.send_chan_msg(beacon_text)
                             logger.info("Beacon sent on channel")
                     except Exception as e:
                         logger.warning(f"Beacon send failed: {e}")
