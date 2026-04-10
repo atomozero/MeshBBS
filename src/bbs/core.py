@@ -242,9 +242,10 @@ class BBSCore:
         # For channel messages, only respond to !bbs
         text = message.text
         if message.is_channel:
-            # Channel messages often arrive as "NodeName: message"
+            # Channel messages arrive as "NodeName: message"
+            sender_name = ""
             if ": " in text:
-                text = text.split(": ", 1)[1]
+                sender_name, text = text.split(": ", 1)
             text = text.strip()
 
             # Only respond to !bbs on channel
@@ -253,7 +254,21 @@ class BBSCore:
 
             # Override text to !help so dispatcher sends command list
             text = "!help"
-            logger.info(f"Channel !bbs from {message.sender_short}, responding with help")
+
+            # Try to resolve sender from name if key is empty
+            if not message.sender_key and sender_name and self.connection._meshcore:
+                contact = self.connection._meshcore.get_contact_by_name(sender_name)
+                if contact:
+                    pk = contact.get("public_key", "")
+                    if isinstance(pk, bytes):
+                        pk = pk.hex()
+                    message.sender_key = pk
+                    logger.info(f"Channel !bbs from {sender_name} -> resolved to {pk[:12]}")
+                else:
+                    logger.warning(f"Channel !bbs from {sender_name} -> cannot resolve, no reply possible")
+                    return None
+            else:
+                logger.info(f"Channel !bbs from {message.sender_short}")
 
         # Create database session and dispatcher
         with get_session() as session:
@@ -438,14 +453,15 @@ class BBSCore:
                 if self._last_message_time:
                     idle_seconds = (datetime.utcnow() - self._last_message_time).total_seconds()
                     if idle_seconds > stale_timeout:
-                        logger.warning(
-                            f"No messages for {int(idle_seconds)}s — "
-                            f"connection may be stale, sending test..."
+                        logger.info(
+                            f"No messages for {int(idle_seconds)}s — keepalive check"
                         )
                         # Try to get contacts as a keepalive
                         try:
                             await mc.commands.get_contacts()
-                            logger.debug("Keepalive OK — connection still alive")
+                            # Reset timer so we don't spam warnings
+                            self._last_message_time = datetime.utcnow()
+                            logger.debug("Keepalive OK")
                         except Exception:
                             logger.warning("Keepalive failed — reconnecting...")
                             await self._do_reconnect(max_backoff)
