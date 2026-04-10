@@ -1488,7 +1488,7 @@ def api_send_broadcast():
             return json.dumps({"ok": False, "message": "Radio non connessa"})
 
         future = asyncio.run_coroutine_threadsafe(
-            mc.commands.send_chan_msg(msg), loop
+            mc.commands.send_chan_msg(0, msg), loop
         )
         future.result(timeout=15)
 
