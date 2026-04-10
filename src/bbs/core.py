@@ -210,8 +210,9 @@ class BBSCore:
         Returns:
             Response string or None
         """
+        msg_type = "channel" if message.is_channel else "private"
         logger.info(
-            f"Received from {message.sender_short} "
+            f"Received {msg_type} from {message.sender_short} "
             f"(hops={message.hops}): {message.text[:50]}..."
         )
 
@@ -222,6 +223,16 @@ class BBSCore:
         # Notify WebSocket clients of new message
         await self._ws_notify_message(message)
 
+        # For channel messages, extract command from "Name: !command" format
+        text = message.text
+        if message.is_channel:
+            # Channel messages often arrive as "NodeName: message"
+            if ": " in text:
+                text = text.split(": ", 1)[1]
+            # Only process if it's a command (starts with !)
+            if not text.strip().startswith("!"):
+                return None  # Ignore non-command channel messages
+
         # Create database session and dispatcher
         with get_session() as session:
             dispatcher = CommandDispatcher(
@@ -231,7 +242,7 @@ class BBSCore:
 
             # Dispatch command
             response = await dispatcher.dispatch(
-                message=message.text,
+                message=text,
                 sender_key=message.sender_key,
                 hops=message.hops,
                 rssi=message.rssi,
