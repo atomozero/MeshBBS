@@ -7,6 +7,8 @@ and leaderboard. Designed for short LoRa messages.
 MIT License - Copyright (c) 2026 MeshBBS Contributors
 """
 
+import json
+import os
 import random
 import time
 from typing import List, Optional, Dict, Tuple
@@ -18,11 +20,51 @@ from .base import BaseCommand, CommandContext, CommandResult, CommandRegistry
 # Active questions per user: sender_key -> (question_index, correct_answer, timestamp)
 _active_questions: Dict[str, Tuple[int, str, float]] = {}
 
-# Scores stored in memory, persisted via activity log
-# sender_key -> {"score": int, "correct": int, "total": int}
+# Scores persisted to JSON file
 _scores: Dict[str, Dict[str, int]] = {}
+_scores_file: Optional[str] = None
+_scores_loaded = False
 
 QUESTION_TIMEOUT = 300  # 5 minutes to answer
+
+
+def _get_scores_path() -> str:
+    """Get path for trivia scores file (next to database)."""
+    global _scores_file
+    if _scores_file is None:
+        try:
+            from utils.config import get_config
+            cfg = get_config()
+            db_dir = os.path.dirname(cfg.database_path)
+            _scores_file = os.path.join(db_dir, "trivia_scores.json")
+        except Exception:
+            _scores_file = "trivia_scores.json"
+    return _scores_file
+
+
+def _load_scores():
+    """Load scores from JSON file."""
+    global _scores, _scores_loaded
+    if _scores_loaded:
+        return
+    _scores_loaded = True
+    path = _get_scores_path()
+    try:
+        if os.path.exists(path):
+            with open(path, "r") as f:
+                _scores = json.load(f)
+    except Exception:
+        _scores = {}
+
+
+def _save_scores():
+    """Save scores to JSON file."""
+    path = _get_scores_path()
+    try:
+        with open(path, "w") as f:
+            json.dump(_scores, f)
+    except Exception:
+        pass
 
 # Question bank: (category, question, options_dict, correct_letter)
 QUESTIONS = [
@@ -122,6 +164,7 @@ QUESTIONS = [
 
 def _get_score(sender_key: str) -> Dict[str, int]:
     """Get or create score for user."""
+    _load_scores()
     if sender_key not in _scores:
         _scores[sender_key] = {"score": 0, "correct": 0, "total": 0}
     return _scores[sender_key]
@@ -212,6 +255,7 @@ class TriviaCommand(BaseCommand):
             points = 10
             score["score"] += points
             score["correct"] += 1
+            _save_scores()
             pct = int(score["correct"] / score["total"] * 100)
             return CommandResult.ok(
                 f"[BBS] Corretto! +{points}pt\n"
@@ -219,6 +263,7 @@ class TriviaCommand(BaseCommand):
                 f"Punti: {score['score']} ({pct}% corrette)"
             )
         else:
+            _save_scores()
             return CommandResult.ok(
                 f"[BBS] Sbagliato!\n"
                 f"Risposta: {correct}) {options[correct]}\n"
@@ -243,6 +288,7 @@ class TriviaCommand(BaseCommand):
 
     def _show_leaderboard(self) -> CommandResult:
         """Show top 5 scores."""
+        _load_scores()
         if not _scores:
             return CommandResult.ok("[BBS] Nessun punteggio. Gioca con !trivia")
 

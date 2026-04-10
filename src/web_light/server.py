@@ -29,6 +29,13 @@ except ImportError:
 
 app = Bottle()
 
+
+def esc(text):
+    """Escape HTML special characters to prevent XSS."""
+    if not text:
+        return ""
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;").replace("'", "&#39;")
+
 # Simple session store (in-memory, single admin)
 _sessions = {}
 _admin_password = os.environ.get("ADMIN_PASSWORD", "meshbbs123")
@@ -254,23 +261,63 @@ def page(title, content, active=""):
 # Routes: Auth
 # ---------------------------------------------------------------
 
+# Login rate limiting: IP -> [timestamps of failed attempts]
+_login_attempts = {}
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_WINDOW = 300      # 5 minutes
+LOGIN_LOCKOUT = 900     # 15 minutes lockout
+
+
+def _check_login_rate(ip: str) -> bool:
+    """Returns True if login is allowed for this IP."""
+    now = time.time()
+    if ip not in _login_attempts:
+        return True
+    attempts = _login_attempts[ip]
+    # Clean old attempts
+    attempts = [t for t in attempts if now - t < LOGIN_LOCKOUT]
+    _login_attempts[ip] = attempts
+    # Check if locked out (too many recent failures)
+    recent = [t for t in attempts if now - t < LOGIN_WINDOW]
+    return len(recent) < LOGIN_MAX_ATTEMPTS
+
+
+def _record_login_failure(ip: str):
+    """Record a failed login attempt."""
+    if ip not in _login_attempts:
+        _login_attempts[ip] = []
+    _login_attempts[ip].append(time.time())
+
+
 @app.route("/login", method=["GET", "POST"])
 def login():
     error = ""
-    if request.method == "POST":
-        username = request.forms.get("username", "")
-        password = request.forms.get("password", "")
+    client_ip = request.environ.get("REMOTE_ADDR", "unknown")
 
-        if username == _admin_username and password == _admin_password:
-            import hashlib
-            sid = hashlib.sha256(f"{time.time()}{username}".encode()).hexdigest()[:32]
-            _sessions[sid] = {"user": username, "time": time.time()}
-            response.set_cookie("session", sid, secret="meshbbs-cookie-secret", path="/", max_age=86400)
-            response.status = 303
-            response.set_header("Location", "/")
-            return ""
+    if request.method == "POST":
+        if not _check_login_rate(client_ip):
+            error = "Troppi tentativi. Riprova tra 15 minuti"
         else:
-            error = "Username o password errati"
+            username = request.forms.get("username", "")
+            password = request.forms.get("password", "")
+
+            if username == _admin_username and password == _admin_password:
+                import hashlib
+                sid = hashlib.sha256(f"{time.time()}{username}".encode()).hexdigest()[:32]
+                _sessions[sid] = {"user": username, "time": time.time()}
+                response.set_cookie("session", sid, secret="meshbbs-cookie-secret", path="/", max_age=86400)
+                # Clear failed attempts on success
+                _login_attempts.pop(client_ip, None)
+                response.status = 303
+                response.set_header("Location", "/")
+                return ""
+            else:
+                _record_login_failure(client_ip)
+                remaining = LOGIN_MAX_ATTEMPTS - len([t for t in _login_attempts.get(client_ip, []) if time.time() - t < LOGIN_WINDOW])
+                if remaining <= 0:
+                    error = "Troppi tentativi. Riprova tra 15 minuti"
+                else:
+                    error = f"Credenziali errate ({remaining} tentativi rimasti)"
 
     return f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -358,7 +405,7 @@ def dashboard():
     activity = _get_recent_activity(10)
     act_rows = ""
     for item in activity:
-        act_rows += f'<tr><td>{item["time"]}</td><td>{item["event"]}</td><td>{item["details"]}</td></tr>'
+        act_rows += f'<tr><td>{esc(item["time"])}</td><td>{esc(item["event"])}</td><td>{esc(item["details"])}</td></tr>'
 
     activity_html = f"""
     <div class="section">
@@ -490,7 +537,7 @@ def partial_dashboard():
     activity = _get_recent_activity(10)
     act_rows = ""
     for item in activity:
-        act_rows += f'<tr><td>{item["time"]}</td><td>{item["event"]}</td><td>{item["details"]}</td></tr>'
+        act_rows += f'<tr><td>{esc(item["time"])}</td><td>{esc(item["event"])}</td><td>{esc(item["details"])}</td></tr>'
 
     activity_html = f"""
     <div class="section">
@@ -520,9 +567,9 @@ def partial_messages():
     for msg in messages:
         rows += f"""<tr>
             <td>#{msg['id']}</td>
-            <td>{msg['author']}</td>
-            <td>{msg['area']}</td>
-            <td class="wrap">{msg['body'][:60]}{'...' if len(msg['body']) > 60 else ''}</td>
+            <td>{esc(msg['author'])}</td>
+            <td>{esc(msg['area'])}</td>
+            <td class="wrap">{esc(msg['body'][:60])}{'...' if len(msg['body']) > 60 else ''}</td>
             <td>{msg['time']}</td>
         </tr>"""
     return f"""<table>
@@ -552,9 +599,9 @@ def partial_logs():
     for log_entry in logs:
         rows += f"""<tr>
             <td>{log_entry['time']}</td>
-            <td>{log_entry['type']}</td>
-            <td>{log_entry.get('user', '')}</td>
-            <td>{log_entry.get('details', '')}</td>
+            <td>{esc(log_entry['type'])}</td>
+            <td>{esc(log_entry.get('user', ''))}</td>
+            <td>{esc(log_entry.get('details', ''))}</td>
         </tr>"""
     return f"""<table>
     <tr><th>Data</th><th>Tipo</th><th>Utente</th><th>Dettagli</th></tr>
@@ -575,9 +622,9 @@ def messages_page():
     for msg in messages:
         rows += f"""<tr>
             <td>#{msg['id']}</td>
-            <td>{msg['author']}</td>
-            <td>{msg['area']}</td>
-            <td class="wrap">{msg['body'][:60]}{'...' if len(msg['body']) > 60 else ''}</td>
+            <td>{esc(msg['author'])}</td>
+            <td>{esc(msg['area'])}</td>
+            <td class="wrap">{esc(msg['body'][:60])}{'...' if len(msg['body']) > 60 else ''}</td>
             <td>{msg['time']}</td>
         </tr>"""
 
@@ -674,11 +721,11 @@ def _render_user_rows(users):
             )
 
         rows += f"""<tr>
-            <td>{u['name']}</td>
+            <td>{esc(u['name'])}</td>
             <td><code>{key[:8]}...</code></td>
             <td>{status}</td>
             <td>{u['messages']}</td>
-            <td>{u['last_seen']}</td>
+            <td>{esc(u['last_seen'])}</td>
             <td class="actions">{actions}</td>
         </tr>"""
     return rows
@@ -841,11 +888,11 @@ def _render_network_rows(nodes):
             if "lat" in n and "lon" in n:
                 gps = f' <span style="color:#64748b;font-size:0.7rem">GPS</span>'
             rows += f"""<tr>
-                <td>{n['name']}{gps}</td>
+                <td>{esc(n['name'])}{gps}</td>
                 <td>{badge}</td>
                 <td>{hop_badge}</td>
                 <td><code>{n['key'][:12]}...</code></td>
-                <td class="wrap">{path}</td>
+                <td class="wrap">{esc(path)}</td>
             </tr>"""
 
     return rows
@@ -876,9 +923,9 @@ def logs_page():
     for log_entry in logs:
         rows += f"""<tr>
             <td>{log_entry['time']}</td>
-            <td>{log_entry['type']}</td>
-            <td>{log_entry.get('user', '')}</td>
-            <td>{log_entry.get('details', '')}</td>
+            <td>{esc(log_entry['type'])}</td>
+            <td>{esc(log_entry.get('user', ''))}</td>
+            <td>{esc(log_entry.get('details', ''))}</td>
         </tr>"""
 
     return page("Log", f"""
