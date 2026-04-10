@@ -190,10 +190,23 @@ class BBSCore:
                     response = await self.handle_message(message)
 
                     if response:
+                        # Resolve full public key for channel messages
+                        dest_key = message.sender_key
+                        if message.is_channel and self.connection._meshcore:
+                            contact = self.connection._meshcore.get_contact_by_key_prefix(dest_key)
+                            if contact:
+                                pk = contact.get("public_key", dest_key)
+                                if isinstance(pk, bytes):
+                                    pk = pk.hex()
+                                dest_key = pk
+                                logger.info(f"Resolved channel sender {message.sender_short} -> {dest_key[:12]}")
+                            else:
+                                logger.warning(f"Could not resolve channel sender {message.sender_short}")
+
                         # Send response back to sender, chunking multi-line
                         # responses to avoid message loss over slow radio links
                         await self._send_response(
-                            destination=message.sender_key,
+                            destination=dest_key,
                             text=response,
                         )
 
@@ -226,7 +239,7 @@ class BBSCore:
         # Notify WebSocket clients of new message
         await self._ws_notify_message(message)
 
-        # For channel messages, only respond to !help from known contacts
+        # For channel messages, only respond to !bbs
         text = message.text
         if message.is_channel:
             # Channel messages often arrive as "NodeName: message"
@@ -234,9 +247,13 @@ class BBSCore:
                 text = text.split(": ", 1)[1]
             text = text.strip()
 
-            # Only respond to !help on channel
-            if not text.lower().startswith("!help"):
+            # Only respond to !bbs on channel
+            if not text.lower().startswith("!bbs"):
                 return None
+
+            # Override text to !help so dispatcher sends command list
+            text = "!help"
+            logger.info(f"Channel !bbs from {message.sender_short}, responding with help")
 
         # Create database session and dispatcher
         with get_session() as session:
