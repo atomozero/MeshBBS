@@ -212,7 +212,7 @@ def page(title, content, active=""):
 <div class="container">
 {content}
 </div>
-<div class="footer">MeshBBS Light &middot; <span id="clock">{datetime.utcnow().strftime('%H:%M:%S UTC')}</span></div>
+<div class="footer">MeshBBS Light &middot; <span id="clock">{datetime.now().strftime('%H:%M:%S')}</span></div>
 <script>
 (function(){{
   // Auto-refresh: fetch page content every 15s and replace #live-content
@@ -228,7 +228,7 @@ def page(title, content, active=""):
   function tick() {{
     var d = new Date();
     var el = document.getElementById('clock');
-    if (el) el.textContent = d.toUTCString().slice(17, 25) + ' UTC';
+    if (el) el.textContent = d.toLocaleTimeString();
   }}
   setInterval(tick, 1000);
 
@@ -1257,8 +1257,8 @@ def api_get_companion_time():
 
         # Format times
         from datetime import datetime as dt
-        companion_str = dt.utcfromtimestamp(companion_ts).strftime("%H:%M:%S UTC") if companion_ts else "N/A"
-        server_str = dt.utcfromtimestamp(server_ts).strftime("%H:%M:%S UTC")
+        companion_str = dt.fromtimestamp(companion_ts).strftime("%H:%M:%S") if companion_ts else "N/A"
+        server_str = dt.fromtimestamp(server_ts).strftime("%H:%M:%S")
 
         return json.dumps({
             "ok": True,
@@ -1544,7 +1544,7 @@ def api_health():
     return json.dumps({
         "status": "ok" if radio["connected"] else "degraded",
         "radio_connected": radio["connected"],
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now().isoformat(),
     })
 
 
