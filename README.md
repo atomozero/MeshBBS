@@ -11,24 +11,32 @@ MeshCore BBS provides classic BBS functionality over MeshCore mesh networks. It 
 ### Core BBS
 - **Public Message Boards**: Post and read messages in themed discussion areas
 - **Private Messaging**: Direct messages between users with optional ephemeral mode
+- **Mail System**: Email-like messages with subject (`!mail`)
+- **Bulletin Board**: Persistent announcements board (`!board`)
+- **News RSS**: Feed news ANSA con cache (`!news`)
+- **Weather**: Previsioni meteo via Open-Meteo API (`!meteo`)
+- **Trivia Game**: Quiz a risposta multipla con classifica (`!trivia`)
+- **Fortune**: Citazioni e curiosita casuali (`!fortune`)
 - **User Management**: Nicknames, roles (admin/moderator), ban/mute/kick
+- **Welcome Message**: Messaggio di benvenuto automatico al primo contatto
+- **Role-aware Help**: `!help` mostra comandi diversi per utenti e admin
 - **Area Management**: Create, edit, delete discussion areas
 - **Privacy & GDPR**: Retention policies, ephemeral messages, data transparency
-- **@Mentions**: Get notified when someone mentions you in a message
 - **Rate Limiting**: Anti-spam protection with configurable limits
-- **Background Tasks**: Automatic retention cleanup scheduler
-- **Activity Logging**: Track system events and user activity
-- **Mock Mode**: Development and testing without hardware
+- **Beacon Broadcast**: Messaggio periodico sulla mesh (configurabile)
+- **Smart Chunking**: Risposte lunghe spezzate automaticamente (140 bytes max)
 
 ### Web Administration (Lightweight)
 - **Unified Launcher**: Single command to start BBS + Web (`python launcher.py`)
 - **Lightweight Web UI**: bottle.py (zero compiled dependencies, runs on Pi Zero)
-- **Dashboard**: Stats utenti, messaggi, radio con auto-refresh ogni 15s
+- **Dashboard**: Stats, grafico attivita 24h (messaggi + advert), radio status
 - **User Management**: Ban, unban, mute, kick, promuovi/declassa da web
 - **Message Viewer**: Lista messaggi con auto-refresh
-- **Network Map**: Mappa Leaflet con nodi mesh, raggruppati per tipologia (RPT/CLI/ROOM/SENS)
+- **Network Map**: Mappa Leaflet con nodi mesh raggruppati per tipo, hop e percorso repeater
+- **Repeater Alerts**: Notifica quando un repeater scompare dalla rete
+- **Settings Page**: Modifica config BBS dalla web (nome, coordinate, beacon, retention)
 - **Activity Logs**: Log sistema con auto-refresh
-- **Connection Indicator**: Pallino verde/rosso nella navbar su tutte le pagine
+- **Connection Indicator**: Pallino verde/rosso nella navbar
 - **Mobile Responsive**: Menu hamburger, tabelle scrollabili, layout adattivo
 - **BBS Control**: Invio advertisement manuale dalla dashboard
 
@@ -145,61 +153,85 @@ The `!help` command shows different commands based on the user's role (user/admi
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `!help` | Show available commands | `!help` |
-| `!help <cmd>` | Help for specific command | `!help post` |
-| `!areas` | List available areas | `!areas` |
-| `!list [n]` | List recent messages | `!list 10` |
-| `!read <id>` | Read a message | `!read 5` |
-| `!post [#area] <msg>` | Post a message | `!post #tech Hello!` |
-| `!reply <id> <msg>` | Reply to a message | `!reply 5 Thanks!` |
-| `!search [#area] <term>` | Search messages | `!search error` |
-| `!nick <name>` | Set your nickname | `!nick John` |
-| `!who [hours]` | Active users | `!who 24` |
-| `!news [feed]` | News from RSS feeds | `!news` |
-| `!news <n>` | Detail of news item | `!news 3` |
-| `!news list` | Available RSS feeds | `!news list` |
+| `!help` | Comandi disponibili (diversi per ruolo) | `!help` |
+| `!help <cmd>` | Dettaglio comando | `!help post` |
+| `!areas` | Lista aree | `!areas` |
+| `!list [n]` | Ultimi messaggi | `!list 10` |
+| `!read <id>` | Leggi messaggio | `!read 5` |
+| `!post [#area] <msg>` | Pubblica messaggio | `!post #tech Ciao!` |
+| `!reply <id> <msg>` | Rispondi a messaggio | `!reply 5 Grazie!` |
+| `!search [#area] <term>` | Cerca messaggi | `!search errore` |
+| `!nick <name>` | Imposta nickname | `!nick Mario` |
+| `!who [hours]` | Utenti attivi | `!who 24` |
+| `!ping` | Test connessione (hop, RSSI) | `!ping` |
+
+### News & Meteo
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `!news` | Ultime notizie ANSA | `!news` |
+| `!news <feed>` | Notizie da feed specifico | `!news ansa-tech` |
+| `!news <n>` | Dettaglio notizia (sommario completo) | `!news 3` |
+| `!news list` | Feed RSS disponibili | `!news list` |
+| `!meteo [citta]` | Previsioni meteo 3 giorni | `!meteo Roma` |
+
+### Mail & Bacheca
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `!mail <user> <ogg> \| <corpo>` | Invia mail con oggetto | `!mail Mario Riunione \| Domani alle 10` |
+| `!mailbox` | Casella mail | `!mailbox` |
+| `!readmail <id>` | Leggi mail | `!readmail 5` |
+| `!delmail <id>` | Elimina mail | `!delmail 5` |
+| `!board` | Bacheca annunci | `!board` |
+| `!board post <testo>` | Pubblica annuncio | `!board post Riunione domani` |
+| `!board read <id>` | Leggi annuncio | `!board read 3` |
 
 ### Private Messages
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `!msg <user> <msg>` | Send private message | `!msg John Hello!` |
-| `!msg! <user> <msg>` | Send ephemeral PM (not saved) | `!msg! John Secret` |
-| `!inbox [n]` | View inbox | `!inbox` |
-| `!readpm <id>` | Read private message | `!readpm 3` |
-| `!delpm <id>` | Delete private message | `!delpm 3` |
-| `!clear` | Mark all PMs as read | `!clear` |
+| `!msg <user> <msg>` | Messaggio privato | `!msg Mario Ciao!` |
+| `!msg! <user> <msg>` | PM effimero (non salvato) | `!msg! Mario Segreto` |
+| `!inbox [n]` | Posta in arrivo | `!inbox` |
+| `!readpm <id>` | Leggi PM | `!readpm 3` |
+| `!delpm <id>` | Elimina PM | `!delpm 3` |
+| `!clear` | Segna tutti PM letti | `!clear` |
+
+### Giochi & Fun
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `!trivia` | Domanda quiz casuale | `!trivia` |
+| `!trivia A/B/C` | Rispondi alla domanda | `!trivia B` |
+| `!trivia score` | Tuo punteggio | `!trivia score` |
+| `!trivia top` | Classifica top 5 | `!trivia top` |
+| `!fortune` | Citazione/curiosita casuale | `!fortune` |
 
 ### User Info
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `!whois <user>` | User profile | `!whois John` |
-| `!stats` | BBS statistics | `!stats` |
-| `!info` | BBS information | `!info` |
-| `!mydata` | Your stored data | `!mydata` |
-| `!gdpr` | Privacy information | `!gdpr` |
+| `!whois <user>` | Profilo utente | `!whois Mario` |
+| `!stats` | Statistiche BBS | `!stats` |
+| `!info` | Informazioni BBS | `!info` |
+| `!mydata` | Dati personali | `!mydata` |
+| `!gdpr` | Informazioni privacy | `!gdpr` |
 
-### Admin Commands (visible only to admins via `!help`)
+### Admin Commands (visibili solo agli admin via `!help`)
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `!ban <user> [reason]` | Ban user | `!ban spammer Spam` |
-| `!unban <user>` | Remove ban | `!unban John` |
-| `!mute <user> [reason]` | Mute user | `!mute John Offtopic` |
-| `!unmute <user>` | Remove mute | `!unmute John` |
-| `!kick <user> [min] [reason]` | Temporary kick | `!kick John 30` |
-| `!unkick <user>` | Remove kick | `!unkick John` |
-| `!promote <user> [admin]` | Promote to mod/admin | `!promote John` |
-| `!demote <user>` | Demote user | `!demote John` |
-| `!staff` | List staff members | `!staff` |
-| `!advert` | Send manual mesh advertisement | `!advert` |
-| `!nodes` | Show mesh nodes/repeaters | `!nodes` |
-| `!newarea <name> [desc]` | Create area | `!newarea gaming` |
-| `!delarea <name>` | Delete area | `!delarea test` |
-| `!editarea <name> <prop> <val>` | Edit area | `!editarea tech desc Tech talk` |
-| `!listareas` | List all areas (admin view) | `!listareas` |
-| `!cleanup` | Run retention cleanup | `!cleanup --dry-run` |
+| `!ban/unban <user>` | Banna/sbanna utente | `!ban spammer Spam` |
+| `!mute/unmute <user>` | Silenzia/ripristina utente | `!mute Mario Offtopic` |
+| `!kick/unkick <user> [min]` | Espelli temporaneamente | `!kick Mario 30` |
+| `!promote/demote <user>` | Promuovi/declassa | `!promote Mario` |
+| `!staff` | Lista staff | `!staff` |
+| `!advert` | Invia advertisement manuale | `!advert` |
+| `!nodes` | Nodi e repeater sulla rete | `!nodes` |
+| `!newarea/delarea <name>` | Crea/elimina area | `!newarea gaming` |
+| `!editarea <name> <prop> <val>` | Modifica area | `!editarea tech desc Tech` |
+| `!cleanup` | Pulizia dati scaduti | `!cleanup --dry-run` |
 
 ## Privacy & GDPR
 
@@ -208,19 +240,18 @@ MeshCore BBS includes privacy features for GDPR compliance:
 ### Data Retention
 - **Private Messages**: Automatically deleted after 30 days (configurable)
 - **Activity Logs**: Automatically deleted after 90 days (configurable)
-- **Manual Cleanup**: Admins can run `/cleanup` to purge old data
+- **Manual Cleanup**: Admins can run `!cleanup` to purge old data
 
 ### Ephemeral Messages
 Users can send private messages that are NOT saved to the database:
 ```
-/msg! John This message won't be stored
+!msg! Mario Questo messaggio non viene salvato
 ```
-Ephemeral messages exist only in memory and disappear after the recipient reads them.
 
 ### User Rights
-- `/mydata` - View what data is stored about you
-- `/gdpr` - View privacy policy and retention settings
-- `/delpm <id>` - Delete your private messages
+- `!mydata` - I tuoi dati salvati
+- `!gdpr` - Informazioni privacy e retention
+- `!delpm <id>` - Elimina messaggi privati
 
 ### Database Encryption (Optional)
 SQLCipher support for encrypting the database at rest. Set `BBS_DATABASE_KEY` environment variable.

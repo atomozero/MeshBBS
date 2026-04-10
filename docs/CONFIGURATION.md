@@ -111,9 +111,18 @@ python launcher.py --web-only --debug
 
 | Variabile | Default | Descrizione |
 |-----------|---------|-------------|
-| `SEND_DELAY` | `3.0` | Secondi pausa tra chunk di risposta |
+| `SEND_DELAY` | `5.0` | Secondi pausa tra chunk di risposta |
 | `MAX_SEND_ATTEMPTS` | `2` | Tentativi massimi invio |
 | `SEND_RETRY_DELAY` | `2.0` | Secondi base tra retry |
+
+### Beacon
+
+| Variabile | Default | Descrizione |
+|-----------|---------|-------------|
+| `beacon_interval` | `0` | Minuti tra beacon broadcast (0=off) |
+| `beacon_message` | `{name} attivo! Scrivi !help per i comandi` | Testo beacon |
+
+Configurabile dalla pagina web Impostazioni (`/settings`).
 
 ### Logging
 
@@ -150,7 +159,11 @@ Le impostazioni modificabili a runtime vengono salvate in `settings.json`:
 | `activity_log_retention_days` | int | Giorni retention log |
 | `send_delay` | float | Secondi tra chunk |
 | `advert_interval_minutes` | int | Minuti tra advert automatici |
+| `beacon_interval` | int | Minuti tra beacon broadcast (0=off) |
+| `beacon_message` | string | Testo beacon ({name} = nome BBS) |
 | `stats_publish_interval` | int | Secondi tra publish MQTT stats |
+
+Modificabili dalla pagina web `/settings` senza SSH.
 
 ---
 

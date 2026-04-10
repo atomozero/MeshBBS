@@ -27,8 +27,10 @@ Credenziali configurate in `config.env`:
 
 Pagina principale con:
 - Card statistiche: utenti, messaggi oggi, PM, stato radio
+- Alert repeater: notifica se un repeater scompare dalla rete
 - Dettagli radio: nome, porta, batteria, uptime, messaggi processati
 - Bottone "Invia Advert" per advertisement manuale
+- Grafico attivita 24h: barre con messaggi (blu) e advert (giallo) per ora
 - Attivita recente: ultimi 10 eventi
 - Auto-refresh ogni 15 secondi
 
@@ -73,6 +75,16 @@ Visualizzazione rete mesh:
 Log attivita sistema:
 - Ultimi 50 eventi con data, tipo, utente, dettagli
 - Auto-refresh ogni 15 secondi
+
+### Impostazioni (`/settings`)
+
+Modifica configurazione BBS senza SSH:
+- Nome BBS, prefisso risposte, area predefinita
+- Coordinate GPS (latitudine, longitudine)
+- Delay invio chunk, intervallo advert
+- Beacon: intervallo e messaggio
+- Retention PM e log
+- Salva in settings.json senza riavvio
 
 ---
 
