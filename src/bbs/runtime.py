@@ -8,8 +8,16 @@ the web server thread.
 MIT License - Copyright (c) 2026 MeshBBS Contributors
 """
 
+import time
+
 _bbs_instance = None
 _event_loop = None
+_start_time = time.time()
+
+
+def get_uptime_seconds():
+    """Get BBS process uptime in seconds."""
+    return int(time.time() - _start_time)
 
 
 def set_bbs_instance(bbs):

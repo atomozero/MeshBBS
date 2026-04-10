@@ -207,8 +207,12 @@ class StatsCollector:
         if os.path.exists(config.database_path):
             db_size = os.path.getsize(config.database_path)
 
-        # Process uptime
-        uptime = int(time.time() - time.monotonic())
+        # BBS process uptime
+        try:
+            from bbs.runtime import get_uptime_seconds
+            uptime = get_uptime_seconds()
+        except ImportError:
+            uptime = 0
 
         # Memory (Linux only)
         memory: Optional[Dict[str, int]] = None
