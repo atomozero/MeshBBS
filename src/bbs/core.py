@@ -255,20 +255,45 @@ class BBSCore:
             # Override text to !help so dispatcher sends command list
             text = "!help"
 
-            # Try to resolve sender from name if key is empty
-            if not message.sender_key and sender_name and self.connection._meshcore:
-                contact = self.connection._meshcore.get_contact_by_name(sender_name)
-                if contact:
-                    pk = contact.get("public_key", "")
-                    if isinstance(pk, bytes):
-                        pk = pk.hex()
-                    message.sender_key = pk
-                    logger.info(f"Channel !bbs from {sender_name} -> resolved to {pk[:12]}")
-                else:
-                    logger.warning(f"Channel !bbs from {sender_name} -> cannot resolve, no reply possible")
+            # Resolve sender to send private reply
+            mc = self.connection._meshcore
+            if mc:
+                # Refresh contacts first
+                try:
+                    await mc.commands.get_contacts()
+                except Exception:
+                    pass
+
+                # Try by key prefix first, then by name
+                resolved = False
+                if message.sender_key:
+                    contact = mc.get_contact_by_key_prefix(message.sender_key)
+                    if contact:
+                        pk = contact.get("public_key", message.sender_key)
+                        if isinstance(pk, bytes):
+                            pk = pk.hex()
+                        message.sender_key = pk
+                        resolved = True
+                        logger.info(f"Channel !bbs from {sender_name} -> resolved by key {pk[:12]}")
+
+                if not resolved and sender_name:
+                    contact = mc.get_contact_by_name(sender_name)
+                    if contact:
+                        pk = contact.get("public_key", "")
+                        if isinstance(pk, bytes):
+                            pk = pk.hex()
+                        message.sender_key = pk
+                        resolved = True
+                        logger.info(f"Channel !bbs from {sender_name} -> resolved by name {pk[:12]}")
+
+                if not resolved:
+                    # Log available contact names for debug
+                    names = [v.get("adv_name", "") or v.get("name", "?") for v in mc.contacts.values()]
+                    logger.warning(f"Channel !bbs from '{sender_name}' -> not found. Contacts: {names[:10]}")
                     return None
             else:
-                logger.info(f"Channel !bbs from {message.sender_short}")
+                logger.warning("Channel !bbs but no meshcore connection")
+                return None
 
         # Create database session and dispatcher
         with get_session() as session:
