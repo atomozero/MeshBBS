@@ -122,6 +122,9 @@ class BBSCore:
         logger.info("Sending initial advertisement...")
         await self.connection.send_advert(flood=True)
 
+        with get_session() as session:
+            log_activity(session, EventType.ADVERT_SENT, details="Avvio BBS")
+
         # Start periodic advert task
         self._advert_task = asyncio.create_task(self._periodic_advert())
 

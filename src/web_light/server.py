@@ -1865,7 +1865,7 @@ def _render_activity_chart():
                 adv_count = session.query(ActivityLog).filter(
                     ActivityLog.timestamp >= hour_start,
                     ActivityLog.timestamp < hour_end,
-                    ActivityLog.event_type == "ADVERT_SENT",
+                    ActivityLog.event_type == "advert_sent",
                 ).count()
 
                 hours_data.append((hour_start.strftime("%H"), msg_count, adv_count))
