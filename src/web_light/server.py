@@ -919,7 +919,64 @@ def settings_page():
         </div>
         <button type="submit" style="margin-top:1rem;max-width:200px">Salva</button>
         </form>
+
+        <div class="section">
+        <h2>Orologio Companion</h2>
+        <div class="card">
+            <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+                <div>
+                    <label style="font-size:0.8rem;color:#94a3b8">Ora companion:</label>
+                    <span id="companion-time" style="font-size:1.1rem;font-weight:600">--:--:--</span>
+                </div>
+                <div>
+                    <label style="font-size:0.8rem;color:#94a3b8">Ora server (Pi):</label>
+                    <span id="server-time" style="font-size:1.1rem;font-weight:600">--:--:--</span>
+                </div>
+                <div>
+                    <label style="font-size:0.8rem;color:#94a3b8">Differenza:</label>
+                    <span id="time-diff" style="font-size:1.1rem;font-weight:600">--</span>
+                </div>
+                <button class="btn-sm btn-blue" style="padding:0.4rem 1rem" onclick="syncTime()">Sincronizza con Pi</button>
+            </div>
+        </div>
+        </div>
+
         <script>
+        // Load companion time on page load
+        (function(){{
+            fetch('/api/companion-time', {{credentials:'same-origin'}})
+            .then(function(r){{ return r.json(); }})
+            .then(function(d){{
+                if (d.ok) {{
+                    document.getElementById('companion-time').textContent = d.companion_time;
+                    document.getElementById('server-time').textContent = d.server_time;
+                    var diff = d.diff_seconds;
+                    var sign = diff >= 0 ? '+' : '';
+                    document.getElementById('time-diff').textContent = sign + diff + 's';
+                    var el = document.getElementById('time-diff');
+                    if (Math.abs(diff) > 60) el.style.color = '#f87171';
+                    else if (Math.abs(diff) > 10) el.style.color = '#fbbf24';
+                    else el.style.color = '#4ade80';
+                }} else {{
+                    document.getElementById('companion-time').textContent = d.message || 'Errore';
+                }}
+            }})
+            .catch(function(){{ document.getElementById('companion-time').textContent = 'N/A'; }});
+        }})();
+
+        function syncTime() {{
+            if (!confirm('Sincronizzare orologio companion con ora Pi?')) return;
+            fetch('/api/companion-time/sync', {{method:'POST', credentials:'same-origin'}})
+            .then(function(r){{ return r.json(); }})
+            .then(function(d){{
+                var ta = document.getElementById('toast-area');
+                var cls = d.ok ? 'toast success' : 'toast error';
+                ta.innerHTML = '<div class="' + cls + '">' + d.message + '</div>';
+                setTimeout(function(){{ ta.innerHTML = ''; location.reload(); }}, 2000);
+            }})
+            .catch(function(){{ alert('Errore di rete'); }});
+        }}
+
         function saveSettings(e) {{
             e.preventDefault();
             var form = document.getElementById('settings-form');
@@ -988,6 +1045,98 @@ def api_save_settings():
             return json.dumps({"ok": True, "message": f"{len(updates)} impostazioni salvate"})
         else:
             return json.dumps({"ok": False, "message": "Nessuna modifica"})
+
+    except Exception as e:
+        return json.dumps({"ok": False, "message": str(e)})
+
+
+# ---------------------------------------------------------------
+# Companion time API
+# ---------------------------------------------------------------
+
+@app.route("/api/companion-time")
+@require_auth
+def api_get_companion_time():
+    """Get companion radio time and compare with server."""
+    response.content_type = "application/json"
+    try:
+        from bbs.runtime import get_bbs_instance, get_event_loop
+        import asyncio
+
+        bbs = get_bbs_instance()
+        loop = get_event_loop()
+
+        if not bbs or not bbs._running or not loop:
+            return json.dumps({"ok": False, "message": "BBS non attivo"})
+
+        mc = bbs.connection._meshcore
+        if not mc:
+            return json.dumps({"ok": False, "message": "Radio non connessa"})
+
+        # Get time from companion (async from thread)
+        future = asyncio.run_coroutine_threadsafe(
+            mc.commands.get_time(), loop
+        )
+        result = future.result(timeout=10)
+
+        if result is None or result.payload is None:
+            return json.dumps({"ok": False, "message": "Nessuna risposta dal companion"})
+
+        companion_ts = result.payload.get("time", 0)
+        server_ts = int(time.time())
+        diff = companion_ts - server_ts
+
+        # Format times
+        from datetime import datetime as dt
+        companion_str = dt.utcfromtimestamp(companion_ts).strftime("%H:%M:%S UTC") if companion_ts else "N/A"
+        server_str = dt.utcfromtimestamp(server_ts).strftime("%H:%M:%S UTC")
+
+        return json.dumps({
+            "ok": True,
+            "companion_time": companion_str,
+            "companion_timestamp": companion_ts,
+            "server_time": server_str,
+            "server_timestamp": server_ts,
+            "diff_seconds": diff,
+        })
+
+    except Exception as e:
+        return json.dumps({"ok": False, "message": str(e)})
+
+
+@app.route("/api/companion-time/sync", method="POST")
+@require_auth
+def api_sync_companion_time():
+    """Sync companion radio time with server (Pi) time."""
+    response.content_type = "application/json"
+    try:
+        from bbs.runtime import get_bbs_instance, get_event_loop
+        import asyncio
+
+        bbs = get_bbs_instance()
+        loop = get_event_loop()
+
+        if not bbs or not bbs._running or not loop:
+            return json.dumps({"ok": False, "message": "BBS non attivo"})
+
+        mc = bbs.connection._meshcore
+        if not mc:
+            return json.dumps({"ok": False, "message": "Radio non connessa"})
+
+        # Set companion time to current server time
+        server_ts = int(time.time())
+        future = asyncio.run_coroutine_threadsafe(
+            mc.commands.set_time(server_ts), loop
+        )
+        result = future.result(timeout=10)
+
+        from datetime import datetime as dt
+        time_str = dt.utcfromtimestamp(server_ts).strftime("%H:%M:%S UTC")
+
+        return json.dumps({
+            "ok": True,
+            "message": f"Orologio sincronizzato: {time_str}",
+        })
 
     except Exception as e:
         return json.dumps({"ok": False, "message": str(e)})
