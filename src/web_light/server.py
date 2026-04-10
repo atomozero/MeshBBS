@@ -445,11 +445,18 @@ def dashboard():
         <div class="section">
         <h2>Broadcast canale</h2>
         <div class="card">
-            <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem">
                 <input type="text" id="broadcast-msg" placeholder="Scrivi messaggio per il canale pubblico..." style="flex:1;min-width:200px;margin:0">
                 <button class="btn-sm btn-blue" style="padding:0.5rem 1rem;font-size:0.85rem" onclick="sendBroadcast()">Invia</button>
             </div>
-            <div style="font-size:0.7rem;color:#64748b;margin-top:0.4rem">Il messaggio verra inviato sul canale pubblico della rete mesh</div>
+            <div style="display:flex;gap:0.4rem;flex-wrap:wrap">
+                <button class="btn-sm" style="background:#334155;color:#e2e8f0" onclick="setBroadcast('0Bit BBS attivo! Scrivi !help per i comandi disponibili')">BBS attivo</button>
+                <button class="btn-sm" style="background:#334155;color:#e2e8f0" onclick="setBroadcast('Benvenuti su 0Bit BBS! Messaggi, news, meteo e trivia via mesh LoRa')">Benvenuto</button>
+                <button class="btn-sm" style="background:#334155;color:#e2e8f0" onclick="setBroadcast('Prova il quiz !trivia e scala la classifica! Sfida gli altri nodi')">Trivia</button>
+                <button class="btn-sm" style="background:#334155;color:#e2e8f0" onclick="setBroadcast('Notizie in tempo reale con !news. Meteo con !meteo <citta>')">News e Meteo</button>
+                <button class="btn-sm" style="background:#334155;color:#e2e8f0" onclick="setBroadcast('Bacheca annunci attiva! Scrivi !board post <testo> per pubblicare')">Bacheca</button>
+            </div>
+            <div style="font-size:0.7rem;color:#64748b;margin-top:0.4rem">Clicca un messaggio preimpostato o scrivi il tuo</div>
         </div>
         </div>
         <script>
@@ -463,6 +470,9 @@ def dashboard():
                 setTimeout(function(){{ ta.innerHTML = ''; }}, 3000);
             }})
             .catch(function(){{ alert('Errore di rete'); }});
+        }}
+        function setBroadcast(text) {{
+            document.getElementById('broadcast-msg').value = text;
         }}
         function sendBroadcast() {{
             var msg = document.getElementById('broadcast-msg').value.trim();
