@@ -238,14 +238,6 @@ class BBSCore:
             if not text.lower().startswith("!help"):
                 return None
 
-            # Only respond if sender is a known contact
-            mc = self.connection._meshcore
-            if mc:
-                contact = mc.get_contact_by_key_prefix(message.sender_key[:12])
-                if not contact:
-                    logger.debug(f"Ignoring channel !help from unknown {message.sender_short}")
-                    return None
-
         # Create database session and dispatcher
         with get_session() as session:
             dispatcher = CommandDispatcher(
