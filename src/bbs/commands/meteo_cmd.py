@@ -20,11 +20,23 @@ from .base import BaseCommand, CommandContext, CommandResult, CommandRegistry
 
 logger = logging.getLogger(__name__)
 
-# Cache
+# Cache with size limits
 _meteo_cache = {}  # "lat,lon" -> (timestamp, data)
 _geo_cache = {}    # "city" -> (timestamp, lat, lon, name)
 CACHE_TTL = 600    # 10 minutes
-HTTP_TIMEOUT = 10
+CACHE_MAX = 50     # max entries per cache
+HTTP_TIMEOUT = 3   # seconds (was 10, reduced for faster feedback)
+
+
+def _evict_cache(cache, max_size=CACHE_MAX):
+    """Remove expired entries and oldest if over limit."""
+    now = time()
+    expired = [k for k, v in cache.items() if now - v[0] > CACHE_TTL]
+    for k in expired:
+        del cache[k]
+    while len(cache) > max_size:
+        oldest = min(cache, key=lambda k: cache[k][0])
+        del cache[oldest]
 
 # WMO weather codes -> compact Italian text
 _WMO = {
@@ -59,6 +71,7 @@ def _geocode(city: str) -> Optional[Tuple[float, float, str]]:
         r = results[0]
         lat, lon = r["latitude"], r["longitude"]
         name = r.get("name", city)
+        _evict_cache(_geo_cache)
         _geo_cache[key] = (now, lat, lon, name)
         return lat, lon, name
     except Exception as e:
@@ -85,6 +98,7 @@ def _fetch_meteo(lat: float, lon: float) -> Optional[dict]:
     try:
         resp = urllib.request.urlopen(url, timeout=HTTP_TIMEOUT)
         data = json.loads(resp.read())
+        _evict_cache(_meteo_cache)
         _meteo_cache[cache_key] = (now, data)
         return data
     except Exception as e:

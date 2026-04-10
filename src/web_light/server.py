@@ -41,6 +41,12 @@ _sessions = {}
 _admin_password = os.environ.get("ADMIN_PASSWORD", "meshbbs123")
 _admin_username = os.environ.get("ADMIN_USERNAME", "admin")
 
+# Generate unique cookie secret per instance (survives restarts via env var)
+import hashlib as _hl
+_cookie_secret = os.environ.get("COOKIE_SECRET", _hl.sha256(
+    f"{_admin_password}{os.getpid()}{time.time()}".encode()
+).hexdigest())
+
 
 # ---------------------------------------------------------------
 # Auth helpers
@@ -48,7 +54,7 @@ _admin_username = os.environ.get("ADMIN_USERNAME", "admin")
 
 def check_auth():
     """Check if request has valid session cookie."""
-    sid = request.get_cookie("session", secret="meshbbs-cookie-secret")
+    sid = request.get_cookie("session", secret=_cookie_secret)
     return sid in _sessions
 
 
@@ -305,7 +311,7 @@ def login():
                 import hashlib
                 sid = hashlib.sha256(f"{time.time()}{username}".encode()).hexdigest()[:32]
                 _sessions[sid] = {"user": username, "time": time.time()}
-                response.set_cookie("session", sid, secret="meshbbs-cookie-secret", path="/", max_age=86400)
+                response.set_cookie("session", sid, secret=_cookie_secret, path="/", max_age=86400)
                 # Clear failed attempts on success
                 _login_attempts.pop(client_ip, None)
                 response.status = 303
@@ -334,7 +340,7 @@ def login():
 
 @app.route("/logout")
 def logout():
-    sid = request.get_cookie("session", secret="meshbbs-cookie-secret")
+    sid = request.get_cookie("session", secret=_cookie_secret)
     if sid in _sessions:
         del _sessions[sid]
     response.delete_cookie("session", path="/")
@@ -617,8 +623,21 @@ def partial_logs():
 @app.route("/messages")
 @require_auth
 def messages_page():
-    messages = _get_recent_messages(25)
+    page_num = int(request.params.get("p", 1))
+    per_page = 25
+    messages, total = _get_messages_paginated(page_num, per_page)
     rows = _render_message_rows(messages)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+
+    pagination = ""
+    if total_pages > 1:
+        links = []
+        if page_num > 1:
+            links.append(f'<a href="/messages?p={page_num - 1}">&laquo; Prec</a>')
+        links.append(f'<span style="color:#94a3b8">Pagina {page_num}/{total_pages}</span>')
+        if page_num < total_pages:
+            links.append(f'<a href="/messages?p={page_num + 1}">Succ &raquo;</a>')
+        pagination = f'<div style="margin-top:0.75rem;text-align:center;font-size:0.85rem">{" &middot; ".join(links)}</div>'
 
     return page("Messaggi", f"""
         <h1 style="margin:1rem 0">Messaggi
@@ -631,6 +650,7 @@ def messages_page():
         {rows if rows else '<tr><td colspan="6" style="text-align:center;color:#64748b">Nessun messaggio</td></tr>'}
         </table>
         </div></div>
+        {pagination}
         <script>
         function deleteMsg(id) {{
             if (!confirm('Eliminare messaggio #' + id + '?')) return;
@@ -1676,16 +1696,24 @@ def _get_radio_status():
 
 def _get_recent_messages(limit=25):
     """Get recent messages from database."""
+    msgs, _ = _get_messages_paginated(1, limit)
+    return msgs
+
+
+def _get_messages_paginated(page_num=1, per_page=25):
+    """Get messages with pagination. Returns (messages_list, total_count)."""
     try:
         from bbs.models.base import get_session
         from bbs.models.message import Message
-        from bbs.models.user import User
 
         with get_session() as session:
+            total = session.query(Message).count()
+            offset = (page_num - 1) * per_page
             messages = (
                 session.query(Message)
                 .order_by(Message.timestamp.desc())
-                .limit(limit)
+                .offset(offset)
+                .limit(per_page)
                 .all()
             )
             result = []
@@ -1699,10 +1727,10 @@ def _get_recent_messages(limit=25):
                     "body": msg.body or "",
                     "time": msg.timestamp.strftime("%d/%m %H:%M") if msg.timestamp else "",
                 })
-            return result
+            return result, total
     except Exception as e:
         logger.error(f"Error fetching messages: {e}")
-        return []
+        return [], 0
 
 
 def _get_users():

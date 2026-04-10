@@ -203,6 +203,12 @@ class TriviaCommand(BaseCommand):
 
     def _new_question(self, ctx: CommandContext) -> CommandResult:
         """Send a new trivia question."""
+        # Cleanup expired questions
+        now = time.time()
+        expired = [k for k, (_, _, ts) in _active_questions.items() if now - ts > QUESTION_TIMEOUT]
+        for k in expired:
+            del _active_questions[k]
+
         # Check if user already has an active question
         if ctx.sender_key in _active_questions:
             _, _, ts = _active_questions[ctx.sender_key]

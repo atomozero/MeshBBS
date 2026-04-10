@@ -35,8 +35,9 @@ NEWS_CACHE_TTL = 300  # 5 minuti
 # Cache: feed_name -> (timestamp, [(title, summary), ...])
 _cache = {}
 
-# Ultimo feed consultato per utente
+# Ultimo feed consultato per utente (max 100 entries)
 _user_last_feed = {}
+_USER_FEED_MAX = 100
 
 
 def _fetch_news(feed_name: str) -> list:
@@ -117,6 +118,10 @@ class NewsCommand(BaseCommand):
             return CommandResult.fail("[BBS] Notizie non disponibili")
 
         _user_last_feed[sender_key] = feed_name
+        # Evict oldest entries if over limit
+        while len(_user_last_feed) > _USER_FEED_MAX:
+            oldest = next(iter(_user_last_feed))
+            del _user_last_feed[oldest]
 
         lines = [f"[BBS] News ({feed_name}):"]
         for i, (title, _) in enumerate(entries, 1):
