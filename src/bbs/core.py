@@ -223,15 +223,25 @@ class BBSCore:
         # Notify WebSocket clients of new message
         await self._ws_notify_message(message)
 
-        # For channel messages, extract command from "Name: !command" format
+        # For channel messages, only respond to !help from known contacts
         text = message.text
         if message.is_channel:
             # Channel messages often arrive as "NodeName: message"
             if ": " in text:
                 text = text.split(": ", 1)[1]
-            # Only process if it's a command (starts with !)
-            if not text.strip().startswith("!"):
-                return None  # Ignore non-command channel messages
+            text = text.strip()
+
+            # Only respond to !help on channel
+            if not text.lower().startswith("!help"):
+                return None
+
+            # Only respond if sender is a known contact
+            mc = self.connection._meshcore
+            if mc:
+                contact = mc.get_contact_by_key_prefix(message.sender_key[:12])
+                if not contact:
+                    logger.debug(f"Ignoring channel !help from unknown {message.sender_short}")
+                    return None
 
         # Create database session and dispatcher
         with get_session() as session:
