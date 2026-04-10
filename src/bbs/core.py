@@ -65,6 +65,9 @@ class BBSCore:
         self._stats_task: Optional[asyncio.Task] = None
         self._ws_status_task: Optional[asyncio.Task] = None
         self._beacon_task: Optional[asyncio.Task] = None
+        self._watchdog_task: Optional[asyncio.Task] = None
+        self._retention_task: Optional[asyncio.Task] = None
+        self._last_message_time: Optional[datetime] = None
 
     async def start(self) -> None:
         """
@@ -131,6 +134,12 @@ class BBSCore:
         # Start periodic beacon broadcast
         self._beacon_task = asyncio.create_task(self._periodic_beacon())
 
+        # Start connection watchdog
+        self._watchdog_task = asyncio.create_task(self._connection_watchdog())
+
+        # Start retention cleanup scheduler
+        self._retention_task = asyncio.create_task(self._periodic_retention_cleanup())
+
         self._running = True
         logger.info(f"{self.config.bbs_name} is now online!")
 
@@ -142,7 +151,8 @@ class BBSCore:
         self._running = False
 
         # Cancel background tasks
-        for task in (self._advert_task, self._stats_task, self._ws_status_task, self._beacon_task):
+        for task in (self._advert_task, self._stats_task, self._ws_status_task,
+                     self._beacon_task, self._watchdog_task, self._retention_task):
             if task:
                 task.cancel()
                 try:
@@ -206,6 +216,7 @@ class BBSCore:
         )
 
         # Update activity timestamp
+        self._last_message_time = datetime.utcnow()
         await self.state_manager.update_activity()
 
         # Notify WebSocket clients of new message
@@ -352,6 +363,148 @@ class BBSCore:
                 break
             except Exception as e:
                 logger.error(f"Error broadcasting WebSocket status: {e}")
+
+    async def _connection_watchdog(self) -> None:
+        """
+        Monitor connection health and auto-reconnect on failure.
+
+        Checks every 30 seconds if the connection is alive.
+        If disconnected, attempts to reconnect with exponential backoff.
+        Also detects silent failures (no messages for a long time).
+        """
+        check_interval = 30
+        max_backoff = 120
+        stale_timeout = 600  # 10 minutes without any message = suspicious
+
+        while self._running:
+            try:
+                await asyncio.sleep(check_interval)
+
+                if not self._running:
+                    break
+
+                mc = self.connection._meshcore
+
+                # Check 1: meshcore object exists and is connected
+                is_alive = (
+                    mc is not None
+                    and self.connection.connected
+                    and hasattr(mc, 'is_connected')
+                    and mc.is_connected
+                )
+
+                if not is_alive:
+                    logger.warning("Connection lost — attempting reconnect...")
+                    await self.state_manager.set_reconnecting(
+                        self.state_manager.state.reconnect_attempts + 1
+                    )
+                    await self._do_reconnect(max_backoff)
+                    continue
+
+                # Check 2: Stale connection detection (heartbeat)
+                if self._last_message_time:
+                    idle_seconds = (datetime.utcnow() - self._last_message_time).total_seconds()
+                    if idle_seconds > stale_timeout:
+                        logger.warning(
+                            f"No messages for {int(idle_seconds)}s — "
+                            f"connection may be stale, sending test..."
+                        )
+                        # Try to get contacts as a keepalive
+                        try:
+                            await mc.commands.get_contacts()
+                            logger.debug("Keepalive OK — connection still alive")
+                        except Exception:
+                            logger.warning("Keepalive failed — reconnecting...")
+                            await self._do_reconnect(max_backoff)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Watchdog error: {e}")
+
+    async def _do_reconnect(self, max_backoff: int) -> None:
+        """Disconnect and reconnect with exponential backoff."""
+        delay = 5
+
+        # Disconnect cleanly
+        try:
+            await self.connection.disconnect()
+        except Exception:
+            pass
+
+        self.connection.connected = False
+        await self.state_manager.set_disconnected("Reconnecting...")
+
+        while self._running:
+            try:
+                logger.info(f"Reconnecting in {delay}s...")
+                await asyncio.sleep(delay)
+
+                success = await self.connection.connect()
+                if success:
+                    logger.info("Reconnected successfully!")
+                    self._last_message_time = datetime.utcnow()
+
+                    # Update state
+                    is_mock = getattr(self.connection, 'is_using_mock', False)
+                    await self.state_manager.set_connected(
+                        public_key=self.connection.identity.public_key,
+                        name=self.connection.identity.name,
+                        port=self.config.tcp_host if self.config.connection_mode == "tcp" else self.config.serial_port,
+                        baud_rate=self.config.baud_rate,
+                        is_mock=is_mock,
+                    )
+
+                    # Re-send advert after reconnect
+                    await self.connection.send_advert(flood=True)
+                    logger.info("Post-reconnect advert sent")
+                    return
+
+            except Exception as e:
+                logger.error(f"Reconnect attempt failed: {e}")
+
+            delay = min(delay * 2, max_backoff)
+
+    async def _periodic_retention_cleanup(self) -> None:
+        """
+        Periodically clean up old private messages and activity logs.
+
+        Runs once per day (24h interval).
+        """
+        interval = 86400  # 24 hours
+
+        # Wait 5 minutes after startup before first run
+        await asyncio.sleep(300)
+
+        while self._running:
+            try:
+                logger.info("Running retention cleanup...")
+
+                from bbs.privacy import RetentionManager
+
+                with get_session() as session:
+                    manager = RetentionManager(session)
+                    pms_deleted, logs_deleted = manager.run_cleanup(
+                        pm_retention_days=self.config.pm_retention_days,
+                        log_retention_days=self.config.activity_log_retention_days,
+                    )
+
+                if pms_deleted > 0 or logs_deleted > 0:
+                    logger.info(
+                        f"Retention cleanup: {pms_deleted} PM, {logs_deleted} log eliminati"
+                    )
+                else:
+                    logger.debug("Retention cleanup: nulla da eliminare")
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Retention cleanup error: {e}")
+
+            try:
+                await asyncio.sleep(interval)
+            except asyncio.CancelledError:
+                break
 
     async def _periodic_advert(self) -> None:
         """
