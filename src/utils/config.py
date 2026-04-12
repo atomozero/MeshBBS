@@ -39,6 +39,9 @@ UPDATABLE_FIELDS = {
     "stats_publish_interval",
     "beacon_interval",
     "beacon_message",
+    "repeater_monitor_enabled",
+    "repeater_monitor_interval_minutes",
+    "repeater_monitor_targets",
 }
 
 
@@ -98,6 +101,13 @@ class Config:
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 
+    # Repeater telemetry monitor
+    # List of dicts: [{"name": str, "public_key": str, "password_env": str}, ...]
+    repeater_monitor_enabled: bool = False
+    repeater_monitor_interval_minutes: int = 30
+    repeater_monitor_targets: list = field(default_factory=list)
+    repeater_monitor_jsonl_path: str = "data/repeater_telemetry.jsonl"
+
     # Privacy settings (GDPR compliance)
     pm_retention_days: int = 30  # Days to keep PMs (0 = forever)
     activity_log_retention_days: int = 90  # Days to keep activity logs (0 = forever)
@@ -121,6 +131,8 @@ class Config:
             self.database_path = str(self.base_path / self.database_path)
         if not os.path.isabs(self.log_path):
             self.log_path = str(self.base_path / self.log_path)
+        if self.repeater_monitor_jsonl_path and not os.path.isabs(self.repeater_monitor_jsonl_path):
+            self.repeater_monitor_jsonl_path = str(self.base_path / self.repeater_monitor_jsonl_path)
         if not self.config_file_path:
             self.config_file_path = str(self.base_path / "data" / "settings.json")
 

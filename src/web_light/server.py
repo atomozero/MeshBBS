@@ -864,6 +864,8 @@ def network_page():
 
     has_map = bool(geo_nodes) or (bbs_lat and bbs_lon)
 
+    telemetry_html = _render_repeater_telemetry()
+
     map_html = ""
     if has_map:
         map_html = f"""
@@ -947,6 +949,7 @@ def network_page():
             </div>
         </div>
         {map_html}
+        {telemetry_html}
         <div class="card"><div id="live-content">
         <table>
         <tr><th>Nome</th><th>Tipo</th><th>Hop</th><th>Chiave</th><th>Percorso</th></tr>
@@ -998,6 +1001,64 @@ def _render_network_rows(nodes):
             </tr>"""
 
     return rows
+
+
+def _render_repeater_telemetry():
+    """Render the repeater telemetry card (empty string if disabled)."""
+    try:
+        from bbs.runtime import get_bbs_instance
+        bbs = get_bbs_instance()
+        if bbs is None or getattr(bbs, "repeater_monitor", None) is None:
+            return ""
+        snapshot = bbs.repeater_monitor.snapshot()
+        if not snapshot:
+            return ""
+    except Exception:
+        return ""
+
+    rows = ""
+    for t in snapshot:
+        name = esc(t.get("name", "?"))
+        sample = t.get("last_sample") or {}
+        err = t.get("last_error")
+        last_attempt = t.get("last_attempt") or "-"
+
+        if sample:
+            bat_mv = sample.get("battery_mv") or sample.get("bat") or sample.get("batt")
+            bat_txt = f"{bat_mv} mV" if bat_mv else "-"
+            uptime = sample.get("uptime_s") or sample.get("uptime")
+            uptime_txt = f"{uptime}s" if uptime else "-"
+            airtime = sample.get("airtime") or sample.get("tx_airtime")
+            airtime_txt = f"{airtime}" if airtime is not None else "-"
+            ts = sample.get("timestamp", "-")
+            status_badge = '<span class="badge badge-green">OK</span>'
+        else:
+            bat_txt = uptime_txt = airtime_txt = ts = "-"
+            status_badge = f'<span class="badge" style="background:#7f1d1d;color:#fca5a5">{esc(err or "no data")}</span>'
+
+        rows += f"""<tr>
+            <td><strong>{name}</strong></td>
+            <td>{status_badge}</td>
+            <td>{bat_txt}</td>
+            <td>{uptime_txt}</td>
+            <td>{airtime_txt}</td>
+            <td style="font-size:0.7rem;color:#64748b">{esc(str(ts))}</td>
+        </tr>"""
+
+    return f"""
+    <div class="section">
+    <h2>Telemetria Ripetitori</h2>
+    <div class="card">
+    <table>
+    <tr><th>Nome</th><th>Stato</th><th>Batteria</th><th>Uptime</th><th>Airtime</th><th>Ultimo campione</th></tr>
+    {rows}
+    </table>
+    <div style="font-size:0.7rem;color:#64748b;margin-top:0.5rem">
+    Ultimo tentativo polling riportato nel campo "Ultimo campione". Polling via login admin + statusreq.
+    </div>
+    </div>
+    </div>
+    """
 
 
 @app.route("/api/partial/network")
@@ -1544,6 +1605,25 @@ def api_send_advert():
 def api_stats():
     response.content_type = "application/json"
     return json.dumps(_get_stats())
+
+
+@app.route("/api/repeater-telemetry")
+@require_auth
+def api_repeater_telemetry():
+    """Return last known telemetry sample for each monitored repeater."""
+    response.content_type = "application/json"
+    try:
+        from bbs.runtime import get_bbs_instance
+        bbs = get_bbs_instance()
+        if bbs is None or getattr(bbs, "repeater_monitor", None) is None:
+            return json.dumps({"enabled": False, "targets": []})
+        return json.dumps({
+            "enabled": True,
+            "targets": bbs.repeater_monitor.snapshot(),
+        })
+    except Exception as e:
+        response.status = 500
+        return json.dumps({"error": str(e)})
 
 
 @app.route("/api/contact/<prefix>")

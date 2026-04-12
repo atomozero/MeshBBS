@@ -68,6 +68,7 @@ class BBSCore:
         self._watchdog_task: Optional[asyncio.Task] = None
         self._retention_task: Optional[asyncio.Task] = None
         self._last_message_time: Optional[datetime] = None
+        self.repeater_monitor = None
 
     async def start(self) -> None:
         """
@@ -143,6 +144,19 @@ class BBSCore:
         # Start retention cleanup scheduler
         self._retention_task = asyncio.create_task(self._periodic_retention_cleanup())
 
+        # Start repeater telemetry monitor (if configured)
+        if getattr(self.config, "repeater_monitor_enabled", False):
+            from meshbbs_radio.repeater_monitor import RepeaterMonitor, load_targets_from_config
+            targets = load_targets_from_config(self.config)
+            if targets:
+                self.repeater_monitor = RepeaterMonitor(
+                    bbs=self,
+                    targets=targets,
+                    interval_seconds=self.config.repeater_monitor_interval_minutes * 60,
+                    jsonl_path=self.config.repeater_monitor_jsonl_path,
+                )
+                self.repeater_monitor.start()
+
         self._running = True
         logger.info(f"{self.config.bbs_name} is now online!")
 
@@ -152,6 +166,9 @@ class BBSCore:
         """
         logger.info("Stopping BBS...")
         self._running = False
+
+        if self.repeater_monitor is not None:
+            await self.repeater_monitor.stop()
 
         # Cancel background tasks
         for task in (self._advert_task, self._stats_task, self._ws_status_task,
