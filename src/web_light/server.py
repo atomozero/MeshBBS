@@ -1546,6 +1546,46 @@ def api_stats():
     return json.dumps(_get_stats())
 
 
+@app.route("/api/contact/<prefix>")
+@require_auth
+def api_contact_by_prefix(prefix):
+    """Resolve a contact by public key prefix. Returns full pubkey and metadata."""
+    response.content_type = "application/json"
+    prefix = (prefix or "").lower().strip()
+    if len(prefix) < 4:
+        response.status = 400
+        return json.dumps({"error": "prefix too short (min 4 hex chars)"})
+
+    try:
+        from bbs.runtime import get_bbs_instance
+        bbs = get_bbs_instance()
+        if bbs is None or not bbs._running or bbs.connection._meshcore is None:
+            response.status = 503
+            return json.dumps({"error": "radio not available"})
+
+        contacts = bbs.connection._meshcore.contacts or {}
+        matches = []
+        for key, info in contacts.items():
+            pk = info.get("public_key", key)
+            if isinstance(pk, bytes):
+                pk = pk.hex()
+            pk = str(pk).lower()
+            if pk.startswith(prefix):
+                matches.append({
+                    "public_key": pk,
+                    "name": info.get("adv_name") or info.get("name", ""),
+                    "type": info.get("type", 0),
+                })
+
+        if not matches:
+            response.status = 404
+            return json.dumps({"error": "no contact matches prefix", "prefix": prefix})
+        return json.dumps({"matches": matches})
+    except Exception as e:
+        response.status = 500
+        return json.dumps({"error": str(e)})
+
+
 @app.route("/api/health")
 def api_health():
     """Health check senza autenticazione."""
