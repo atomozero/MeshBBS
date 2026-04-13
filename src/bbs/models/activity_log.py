@@ -33,6 +33,9 @@ class EventType(str, Enum):
     MESSAGE_DELETED = "message_deleted"
     PRIVATE_MSG_SENT = "private_msg_sent"
 
+    # Command execution (verbose — use filter to view)
+    COMMAND_EXECUTED = "command_executed"
+
     # Area events
     AREA_CREATED = "area_created"
     AREA_DELETED = "area_deleted"

@@ -170,6 +170,23 @@ class CommandDispatcher:
             else:
                 logger.debug(f"Command failed: {result.error or result.response}")
 
+            try:
+                from bbs.models.activity_log import EventType, log_activity
+                args_str = " ".join(parsed.args) if parsed.args else ""
+                details = f"!{parsed.command}"
+                if args_str:
+                    details += f" {args_str[:80]}"
+                if not result.success:
+                    details += " [fail]"
+                log_activity(
+                    self.session,
+                    EventType.COMMAND_EXECUTED,
+                    user_key=sender_key,
+                    details=details,
+                )
+            except Exception:
+                pass
+
             resp = result.response
             if welcome_msg:
                 resp = welcome_msg + resp

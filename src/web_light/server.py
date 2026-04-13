@@ -224,6 +224,8 @@ def page(title, content, active=""):
              location.pathname === '/network' ? '/api/partial/network' :
              location.pathname === '/logs' ? '/api/partial/logs' : null;
   if (!path) return;
+  // Preserve query string (e.g. ?filter=commands on /logs)
+  if (location.search) path += location.search;
 
   function tick() {{
     var d = new Date();
@@ -611,7 +613,10 @@ def partial_users():
 @require_auth
 def partial_logs():
     """Return logs table HTML fragment."""
-    logs = _get_logs(50)
+    filter_mode = request.params.get("filter", "events")
+    if filter_mode not in ("events", "commands", "all"):
+        filter_mode = "events"
+    logs = _get_logs(100 if filter_mode == "commands" else 50, filter_mode)
     rows = ""
     for log_entry in logs:
         rows += f"""<tr>
@@ -1080,7 +1085,11 @@ def partial_network():
 @app.route("/logs")
 @require_auth
 def logs_page():
-    logs = _get_logs(50)
+    filter_mode = request.params.get("filter", "events")
+    if filter_mode not in ("events", "commands", "all"):
+        filter_mode = "events"
+
+    logs = _get_logs(100 if filter_mode == "commands" else 50, filter_mode)
 
     rows = ""
     for log_entry in logs:
@@ -1091,10 +1100,22 @@ def logs_page():
             <td>{esc(log_entry.get('details', ''))}</td>
         </tr>"""
 
+    def tab(val, label):
+        active_class = "badge-green" if filter_mode == val else "badge"
+        return (
+            f'<a href="/logs?filter={val}" '
+            f'class="badge {active_class}" '
+            f'style="margin-right:0.4rem;text-decoration:none;padding:0.3rem 0.8rem;font-size:0.75rem">'
+            f'{label}</a>'
+        )
+
+    tabs = tab("events", "Eventi") + tab("commands", "Comandi") + tab("all", "Tutto")
+
     return page("Log", f"""
         <h1 style="margin:1rem 0">Log attivita
             <span id="live-indicator" class="badge badge-green" style="font-size:0.6rem;vertical-align:middle;opacity:0.5">LIVE</span>
         </h1>
+        <div style="margin-bottom:0.8rem" data-filter="{filter_mode}">{tabs}</div>
         <div class="card"><div id="live-content">
         <table>
         <tr><th>Data</th><th>Tipo</th><th>Utente</th><th>Dettagli</th></tr>
@@ -1926,16 +1947,28 @@ def _get_recent_activity(limit=10):
         return []
 
 
-def _get_logs(limit=50):
-    """Get activity logs."""
+def _get_logs(limit=50, filter_mode="events"):
+    """
+    Get activity logs.
+
+    filter_mode:
+        "events"   → tutti tranne command_executed (default, meno rumoroso)
+        "commands" → solo command_executed
+        "all"      → tutto
+    """
     try:
         from bbs.models.base import get_session
         from bbs.models.activity_log import ActivityLog
 
         with get_session() as session:
+            query = session.query(ActivityLog)
+            if filter_mode == "events":
+                query = query.filter(ActivityLog.event_type != "command_executed")
+            elif filter_mode == "commands":
+                query = query.filter(ActivityLog.event_type == "command_executed")
+
             logs = (
-                session.query(ActivityLog)
-                .order_by(ActivityLog.timestamp.desc())
+                query.order_by(ActivityLog.timestamp.desc())
                 .limit(limit)
                 .all()
             )
