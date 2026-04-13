@@ -194,13 +194,11 @@ class StatsCommand(BaseCommand):
         # Count private messages
         total_pms = self.session.query(PrivateMessage).count()
 
-        # Build response
         lines = [
-            "[BBS] Statistiche:",
-            f"  Utenti: {total_users} totali, {active_users} attivi (24h)",
-            f"  Messaggi: {total_messages} totali, {recent_messages} oggi",
-            f"  Aree: {public_areas} pubbliche ({total_areas} totali)",
-            f"  PM: {total_pms} totali",
+            "[BBS] Stats:",
+            f"Utenti: {total_users} ({active_users} 24h)",
+            f"Msg: {total_messages} ({recent_messages} oggi)",
+            f"Aree: {public_areas}/{total_areas}  PM: {total_pms}",
         ]
 
         return CommandResult.ok("\n".join(lines))
@@ -245,10 +243,8 @@ class InfoCommand(BaseCommand):
 
         lines = [
             f"[BBS] {self.BBS_NAME} v{self.VERSION}",
-            f"  Utenti registrati: {total_users}",
-            f"  Aree pubbliche: {total_areas}",
-            "  Protocollo: MeshCore LoRa",
-            "  Licenza: MIT",
+            f"Utenti: {total_users}  Aree: {total_areas}",
+            "MeshCore LoRa - MIT",
         ]
 
         return CommandResult.ok("\n".join(lines))
@@ -297,45 +293,35 @@ class WhoisCommand(BaseCommand):
                 f"[BBS] Utente '{identifier}' non trovato"
             )
 
-        # Build response
-        lines = [f"[BBS] Profilo: {user.display_name}"]
+        lines = [f"[BBS] {user.display_name}"]
+        lines.append(f"Ruolo: {user.role_display}")
+        lines.append(f"Dal: {user.first_seen.strftime('%d/%m/%Y')}")
 
-        # Role
-        lines.append(f"  Ruolo: {user.role_display}")
-
-        # Registration date
-        first_seen = user.first_seen.strftime("%d/%m/%Y")
-        lines.append(f"  Registrato: {first_seen}")
-
-        # Last seen
         last_seen_delta = datetime.utcnow() - user.last_seen
         if last_seen_delta.days > 0:
-            last_seen_str = f"{last_seen_delta.days} giorni fa"
+            last_seen_str = f"{last_seen_delta.days}g fa"
         elif last_seen_delta.seconds >= 3600:
-            last_seen_str = f"{last_seen_delta.seconds // 3600} ore fa"
+            last_seen_str = f"{last_seen_delta.seconds // 3600}h fa"
         elif last_seen_delta.seconds >= 60:
-            last_seen_str = f"{last_seen_delta.seconds // 60} minuti fa"
+            last_seen_str = f"{last_seen_delta.seconds // 60}m fa"
         else:
             last_seen_str = "online"
-        lines.append(f"  Ultimo accesso: {last_seen_str}")
+        lines.append(f"Visto: {last_seen_str}")
 
-        # Message count
         msg_count = (
             self.session.query(Message)
             .filter(Message.sender_key == user.public_key)
             .count()
         )
-        lines.append(f"  Messaggi: {msg_count}")
+        lines.append(f"Msg: {msg_count}")
 
-        # Status (only show if there's something to report)
         if user.is_banned:
-            lines.append("  Stato: BANNATO")
+            lines.append("BANNATO")
         elif user.is_kicked:
-            lines.append(f"  Stato: Kick ({user.kick_remaining_minutes} min)")
+            lines.append(f"Kick {user.kick_remaining_minutes}m")
         elif user.is_muted:
-            lines.append("  Stato: Silenziato")
+            lines.append("Mutato")
 
-        # Public key (shortened)
-        lines.append(f"  Chiave: {user.public_key[:16]}...")
+        lines.append(f"Key: {user.public_key[:12]}")
 
         return CommandResult.ok("\n".join(lines))

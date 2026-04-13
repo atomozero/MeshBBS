@@ -80,7 +80,9 @@ class Config:
     max_messages_per_minute: int = 30
 
     # Send throttling (delay between chunked responses over radio)
-    send_delay: float = 5.0  # seconds between chunks when sending multi-line responses
+    # 10s lets the previous chunk propagate through repeaters before the next
+    # one enters the mesh, cutting drop rate for multi-hop users.
+    send_delay: float = 10.0  # seconds between chunks when sending multi-line responses
     max_send_attempts: int = 2  # max retry attempts for send_msg_with_retry
     send_retry_delay: float = 2.0  # seconds between retry attempts
 

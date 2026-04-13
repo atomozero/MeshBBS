@@ -22,7 +22,8 @@ class ListCommand(BaseCommand):
     usage = "!list [n]"
     aliases = ["l", "ls"]
 
-    MAX_LIMIT = 10
+    MAX_LIMIT = 6
+    PREVIEW_LEN = 40
 
     def __init__(self, session: Session):
         self.session = session
@@ -37,19 +38,15 @@ class ListCommand(BaseCommand):
 
         Shows recent messages from the default area.
         """
-        # Parse limit argument
-        limit = self.config.messages_per_page
+        limit = min(self.config.messages_per_page, self.MAX_LIMIT)
 
         if args:
             try:
                 limit = int(args[0])
                 limit = max(1, min(limit, self.MAX_LIMIT))
             except ValueError:
-                return CommandResult.fail(
-                    "[BBS] Uso: !list [numero]\nEsempio: !list 5"
-                )
+                return CommandResult.fail("[BBS] Uso: !list [n]")
 
-        # Get recent messages
         messages = self.message_repo.get_recent_messages(
             area_name=self.config.default_area,
             limit=limit,
@@ -58,13 +55,10 @@ class ListCommand(BaseCommand):
         if not messages:
             return CommandResult.ok("[BBS] Nessun messaggio")
 
-        # Format message list
         lines = ["[BBS]"]
         for msg in messages:
             author = msg.author.display_name if msg.author else msg.sender_key[:8]
-            age = msg.age_string
-            preview = msg.preview
-
-            lines.append(f"#{msg.id} {author} ({age}): {preview}")
+            preview = (msg.preview or "")[:self.PREVIEW_LEN]
+            lines.append(f"#{msg.id} {author} ({msg.age_string}): {preview}")
 
         return CommandResult.ok("\n".join(lines))

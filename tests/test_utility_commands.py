@@ -288,40 +288,36 @@ class TestStatsCommand:
     async def test_stats_basic(self, dispatcher, sender_key, user):
         """Test basic /stats output."""
         response = await dispatcher.dispatch("!stats", sender_key)
-        assert "[BBS] Statistiche:" in response
+        assert "[BBS] Stats:" in response
         assert "Utenti:" in response
-        assert "Messaggi:" in response
+        assert "Msg:" in response
         assert "Aree:" in response
         assert "PM:" in response
 
     @pytest.mark.asyncio
     async def test_stats_shows_user_count(self, db_session, dispatcher, sender_key, user):
         """Test /stats shows correct user count."""
-        # Add more users
         for i in range(5):
             db_session.add(User(public_key=f"user{i}1234567890"))
         db_session.commit()
 
         response = await dispatcher.dispatch("!stats", sender_key)
-        assert "6 totali" in response  # 1 original + 5 new
+        assert "Utenti: 6 " in response  # 1 original + 5 new
 
     @pytest.mark.asyncio
     async def test_stats_shows_active_users(self, db_session, dispatcher, sender_key, user):
         """Test /stats shows active users in last 24h."""
-        # Add an old user
         old_user = User(public_key="olduser1234567890")
         old_user.last_seen = datetime.utcnow() - timedelta(days=5)
         db_session.add(old_user)
         db_session.commit()
 
         response = await dispatcher.dispatch("!stats", sender_key)
-        # Old user shouldn't be counted as active
-        assert "attivi (24h)" in response
+        assert "24h)" in response
 
     @pytest.mark.asyncio
     async def test_stats_shows_message_count(self, db_session, dispatcher, sender_key, user, area):
         """Test /stats shows message count."""
-        # Add messages
         for i in range(10):
             msg = Message(
                 area_id=area.id,
@@ -332,16 +328,14 @@ class TestStatsCommand:
         db_session.commit()
 
         response = await dispatcher.dispatch("!stats", sender_key)
-        assert "10 totali" in response
+        assert "Msg: 10 " in response
 
     @pytest.mark.asyncio
     async def test_stats_shows_area_count(self, db_session, dispatcher, sender_key, user):
         """Test /stats shows area count."""
-        # Get current counts
         current_public = db_session.query(Area).filter(Area.is_public == True).count()
         current_total = db_session.query(Area).count()
 
-        # Add areas
         for i in range(3):
             db_session.add(Area(name=f"statarea{i}", is_public=True))
         db_session.add(Area(name="stathidden", is_public=False))
@@ -350,20 +344,19 @@ class TestStatsCommand:
         response = await dispatcher.dispatch("!stats", sender_key)
         expected_public = current_public + 3
         expected_total = current_total + 4
-        assert f"{expected_public} pubbliche" in response
-        assert f"{expected_total} totali" in response
+        assert f"Aree: {expected_public}/{expected_total}" in response
 
     @pytest.mark.asyncio
     async def test_stats_alias_stat(self, dispatcher, sender_key, user):
         """Test /stat alias."""
         response = await dispatcher.dispatch("/stat", sender_key)
-        assert "Statistiche:" in response
+        assert "Stats:" in response
 
     @pytest.mark.asyncio
     async def test_stats_alias_statistics(self, dispatcher, sender_key, user):
         """Test /statistics alias."""
         response = await dispatcher.dispatch("/statistics", sender_key)
-        assert "Statistiche:" in response
+        assert "Stats:" in response
 
 
 # ============================================
@@ -384,13 +377,13 @@ class TestInfoCommand:
     async def test_info_shows_user_count(self, db_session, dispatcher, sender_key, user):
         """Test /info shows registered users."""
         response = await dispatcher.dispatch("!info", sender_key)
-        assert "Utenti registrati:" in response
+        assert "Utenti:" in response
 
     @pytest.mark.asyncio
     async def test_info_shows_area_count(self, db_session, dispatcher, sender_key, user, area):
         """Test /info shows public areas."""
         response = await dispatcher.dispatch("!info", sender_key)
-        assert "Aree pubbliche:" in response
+        assert "Aree:" in response
 
     @pytest.mark.asyncio
     async def test_info_shows_protocol(self, dispatcher, sender_key, user):
@@ -440,13 +433,13 @@ class TestWhoisCommand:
     async def test_whois_by_nickname(self, dispatcher, sender_key, user, other_user):
         """Test /whois by nickname."""
         response = await dispatcher.dispatch("!whois OtherUser", sender_key)
-        assert "Profilo: OtherUser" in response
+        assert "OtherUser" in response
 
     @pytest.mark.asyncio
     async def test_whois_by_public_key(self, dispatcher, sender_key, user, other_user, other_key):
         """Test /whois by public key."""
         response = await dispatcher.dispatch(f"!whois {other_key[:8]}", sender_key)
-        assert "Profilo: OtherUser" in response
+        assert "OtherUser" in response
 
     @pytest.mark.asyncio
     async def test_whois_shows_role(self, dispatcher, sender_key, user, other_user):
@@ -476,13 +469,13 @@ class TestWhoisCommand:
     async def test_whois_shows_registration_date(self, dispatcher, sender_key, user, other_user):
         """Test /whois shows registration date."""
         response = await dispatcher.dispatch("!whois OtherUser", sender_key)
-        assert "Registrato:" in response
+        assert "Dal:" in response
 
     @pytest.mark.asyncio
     async def test_whois_shows_last_seen(self, dispatcher, sender_key, user, other_user):
         """Test /whois shows last seen."""
         response = await dispatcher.dispatch("!whois OtherUser", sender_key)
-        assert "Ultimo accesso:" in response
+        assert "Visto:" in response
 
     @pytest.mark.asyncio
     async def test_whois_shows_message_count(self, db_session, dispatcher, sender_key, user, other_user, area):
@@ -497,7 +490,7 @@ class TestWhoisCommand:
         db_session.commit()
 
         response = await dispatcher.dispatch("!whois OtherUser", sender_key)
-        assert "Messaggi: 5" in response
+        assert "Msg: 5" in response
 
     @pytest.mark.asyncio
     async def test_whois_shows_banned_status(self, db_session, dispatcher, sender_key, user, other_user):
@@ -515,7 +508,7 @@ class TestWhoisCommand:
         db_session.commit()
 
         response = await dispatcher.dispatch("!whois OtherUser", sender_key)
-        assert "Silenziato" in response
+        assert "Mutato" in response
 
     @pytest.mark.asyncio
     async def test_whois_shows_kicked_status(self, db_session, dispatcher, sender_key, user, other_user):
@@ -530,26 +523,26 @@ class TestWhoisCommand:
     async def test_whois_shows_public_key(self, dispatcher, sender_key, user, other_user, other_key):
         """Test /whois shows truncated public key."""
         response = await dispatcher.dispatch("!whois OtherUser", sender_key)
-        assert "Chiave:" in response
-        assert other_key[:16] in response
+        assert "Key:" in response
+        assert other_key[:12] in response
 
     @pytest.mark.asyncio
     async def test_whois_alias_user(self, dispatcher, sender_key, user, other_user):
         """Test /user alias."""
         response = await dispatcher.dispatch("/user OtherUser", sender_key)
-        assert "Profilo:" in response
+        assert "OtherUser" in response
 
     @pytest.mark.asyncio
     async def test_whois_alias_profile(self, dispatcher, sender_key, user, other_user):
         """Test /profile alias."""
         response = await dispatcher.dispatch("/profile OtherUser", sender_key)
-        assert "Profilo:" in response
+        assert "OtherUser" in response
 
     @pytest.mark.asyncio
     async def test_whois_self(self, dispatcher, sender_key, user):
         """Test /whois on self."""
         response = await dispatcher.dispatch("!whois TestUser", sender_key)
-        assert "Profilo: TestUser" in response
+        assert "TestUser" in response
 
 
 # ============================================
@@ -588,4 +581,4 @@ class TestUtilityWorkflow:
 
         # Check stats
         response = await dispatcher.dispatch("!stats", sender_key)
-        assert "5 totali" in response or "Messaggi:" in response
+        assert "Msg: 5" in response

@@ -346,11 +346,11 @@ class TestStatsConfig:
         assert cfg.stats_publish_interval == 300
 
     def test_default_send_delay(self):
-        """Verify default send_delay is 3 seconds."""
+        """Verify default send_delay is 10 seconds (tuned for multi-hop mesh)."""
         from utils.config import Config
 
         cfg = Config()
-        assert cfg.send_delay == 3.0
+        assert cfg.send_delay == 10.0
 
     def test_default_max_send_attempts(self):
         """Verify default max_send_attempts is 2."""

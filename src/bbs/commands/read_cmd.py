@@ -74,29 +74,20 @@ class ReadCommand(BaseCommand):
 
         response = (
             f"{header}\n"
-            f"Da: {author} ({age})\n"
+            f"{author} ({age})\n"
             f"{message.body}"
         )
 
-        # Add reply count if any
         if message.reply_count > 0:
-            response += f"\n[{message.reply_count} risposte]"
+            response += f"\n[{message.reply_count} risp]"
 
-        # Add reply hint
-        response += f"\nRispondi: !reply {msg_id} <testo>"
-
-        # Truncate if too long (but keep the reply hint)
-        if len(response) > self.MAX_RESPONSE_LENGTH + 50:
-            # Truncate body, keep structure
-            max_body = self.MAX_RESPONSE_LENGTH - len(header) - len(f"Da: {author} ({age})\n") - 50
-            truncated_body = message.body[:max_body] + "..." if len(message.body) > max_body else message.body
-            response = (
-                f"{header}\n"
-                f"Da: {author} ({age})\n"
-                f"{truncated_body}"
-            )
+        # Truncate body so the full response fits in ~2 mesh chunks
+        if len(response) > self.MAX_RESPONSE_LENGTH:
+            overhead = len(header) + len(f"\n{author} ({age})\n")
+            max_body = self.MAX_RESPONSE_LENGTH - overhead - 5
+            truncated_body = message.body[:max_body] + "..."
+            response = f"{header}\n{author} ({age})\n{truncated_body}"
             if message.reply_count > 0:
-                response += f"\n[{message.reply_count} risposte]"
-            response += f"\nRispondi: !reply {msg_id} <testo>"
+                response += f"\n[{message.reply_count} risp]"
 
         return CommandResult.ok(response)

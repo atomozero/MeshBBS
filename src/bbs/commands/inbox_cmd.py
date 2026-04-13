@@ -25,8 +25,8 @@ class InboxCommand(BaseCommand):
     usage = "!inbox [n]"
     aliases = ["mail", "pms"]
 
-    DEFAULT_LIMIT = 5
-    MAX_LIMIT = 10
+    DEFAULT_LIMIT = 4
+    MAX_LIMIT = 6
 
     def __init__(self, session: Session):
         self.session = session

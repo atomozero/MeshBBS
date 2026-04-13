@@ -265,8 +265,10 @@ class BBSCore:
                 sender_name, text = text.split(": ", 1)
             text = text.strip()
 
-            # Only respond to !bbs on channel
-            if not text.lower().startswith("!bbs"):
+            # Only respond to exact "!bbs" on channel — anything longer
+            # (e.g. "!bbs ciao a tutti") is treated as normal chatter and
+            # ignored, to avoid accidental triggers that cost mesh airtime.
+            if text.lower().strip() != "!bbs":
                 return None
 
             # Override text to !help so dispatcher sends command list

@@ -52,24 +52,23 @@ class HelpCommand(BaseCommand):
                     f"[BBS] Comando '!{cmd_name}' non trovato"
                 )
 
-        # List commands based on user role
-        all_commands = CommandRegistry.get_public_commands()
+        # Short list of essential commands — must fit in a single mesh chunk
+        # (~140 byte MTU). Users can discover the rest via !help <cmd>.
+        essential = [
+            "post", "read", "list", "areas",
+            "msg", "inbox", "who", "nick", "stats",
+        ]
 
-        user_cmds = []
-        admin_cmds = []
-        for cmd in all_commands:
-            if cmd.admin_only:
-                admin_cmds.append(cmd)
-            else:
-                user_cmds.append(cmd)
+        if ctx.is_admin:
+            response = (
+                "[BBS] !post !read !list !areas !msg !inbox !who !nick\n"
+                "Admin: !ban !mute !kick !delete\n"
+                "!help <cmd> per dettagli"
+            )
+        else:
+            response = (
+                "[BBS] !post !read !list !areas !msg !inbox !who !nick !stats\n"
+                "!help <cmd> per dettagli"
+            )
 
-        lines = ["[BBS] Comandi:"]
-        lines.append(" ".join(sorted([f"!{c.name}" for c in user_cmds])))
-
-        if ctx.is_admin and admin_cmds:
-            lines.append("Admin:")
-            lines.append(" ".join(sorted([f"!{c.name}" for c in admin_cmds])))
-
-        lines.append("Usa !help <cmd> per dettagli")
-
-        return CommandResult.ok("\n".join(lines))
+        return CommandResult.ok(response)

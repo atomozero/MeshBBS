@@ -27,7 +27,7 @@ class WhoCommand(BaseCommand):
     # Default hours to look back
     DEFAULT_HOURS = 24
     MAX_HOURS = 168  # 1 week
-    MAX_USERS_DISPLAY = 10
+    MAX_USERS_DISPLAY = 6
 
     def __init__(self, session: Session):
         self.session = session
@@ -74,25 +74,15 @@ class WhoCommand(BaseCommand):
         total_users = len(users)
         display_users = users[:self.MAX_USERS_DISPLAY]
 
-        lines = [f"[BBS] Utenti attivi ({total_users}) - ultime {hours}h:"]
+        lines = [f"[BBS] Attivi {hours}h ({total_users}):"]
 
         for user in display_users:
             age = self._format_last_seen(user.last_seen)
-            name = user.display_name
+            role = " [A]" if user.is_admin else (" [M]" if user.is_moderator else "")
+            lines.append(f"{user.display_name}{role} {age}")
 
-            # Add role indicator
-            role = ""
-            if user.is_admin:
-                role = " [A]"
-            elif user.is_moderator:
-                role = " [M]"
-
-            lines.append(f"  {name}{role} ({age})")
-
-        # Show if there are more users
         if total_users > self.MAX_USERS_DISPLAY:
-            remaining = total_users - self.MAX_USERS_DISPLAY
-            lines.append(f"  ... e altri {remaining}")
+            lines.append(f"+{total_users - self.MAX_USERS_DISPLAY}")
 
         return CommandResult.ok("\n".join(lines))
 

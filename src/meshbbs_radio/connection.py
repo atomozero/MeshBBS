@@ -72,11 +72,41 @@ class BaseMeshCoreConnection(ABC):
     Provides the interface that all connection implementations must follow.
     """
 
+    # How long a get_contacts() fetch stays fresh before a new fetch is
+    # triggered on the next send. Lookups within this window reuse the
+    # contact map already in self._meshcore.contacts, avoiding redundant
+    # companion-radio round-trips between chunks of the same response.
+    CONTACTS_CACHE_TTL = 30.0  # seconds
+
     def __init__(self):
         self.identity: Optional[Identity] = None
         self.connected: bool = False
         self._message_callbacks: List[MessageCallback] = []
         self._running: bool = False
+        self._contacts_last_fetch: float = 0.0
+
+    async def _refresh_contacts_if_stale(self) -> bool:
+        """
+        Fetch contacts from the companion only if the cache is stale.
+
+        Returns True on success (or cache hit), False if fetch errored.
+        """
+        import time as _time
+        now = _time.monotonic()
+        if now - self._contacts_last_fetch < self.CONTACTS_CACHE_TTL:
+            return True
+        try:
+            result = await self._meshcore.commands.get_contacts()
+            if result.type == EventType.ERROR:
+                return False
+            self._contacts_last_fetch = now
+            return True
+        except Exception:
+            return False
+
+    def _invalidate_contacts_cache(self) -> None:
+        """Force a fresh fetch on the next send (e.g. after a failure)."""
+        self._contacts_last_fetch = 0.0
 
     @abstractmethod
     async def connect(self) -> bool:
@@ -359,21 +389,12 @@ class MeshCoreConnection(BaseMeshCoreConnection):
             return False
 
         try:
-            # Get contacts to find the destination
-            result = await self._meshcore.commands.get_contacts()
+            await self._refresh_contacts_if_stale()
 
-            if result.type == EventType.ERROR:
-                logger.error(f"Error getting contacts: {result.payload}")
-                # Try sending directly with the public key
-                contact = destination
-            else:
-                # Find contact by public key prefix
-                contact = self._meshcore.get_contact_by_key_prefix(destination[:12])
-                if not contact:
-                    # Use the destination key directly
-                    contact = bytes.fromhex(destination) if len(destination) == 64 else destination
+            contact = self._meshcore.get_contact_by_key_prefix(destination[:12])
+            if not contact:
+                contact = bytes.fromhex(destination) if len(destination) == 64 else destination
 
-            # Send message with retry and backoff for reliability
             config = get_config() if get_config else None
             max_attempts = config.max_send_attempts if config else 2
             retry_delay = config.send_retry_delay if config else 2.0
@@ -384,6 +405,7 @@ class MeshCoreConnection(BaseMeshCoreConnection):
 
             if not send_result:
                 logger.error(f"Failed to send message to {destination[:8]}...")
+                self._invalidate_contacts_cache()
                 return False
 
             logger.debug(f"Message sent to {destination[:8]}...: {text[:30]}...")
@@ -391,6 +413,7 @@ class MeshCoreConnection(BaseMeshCoreConnection):
 
         except Exception as e:
             logger.error(f"Error sending message: {e}")
+            self._invalidate_contacts_cache()
             return False
 
     async def _send_with_backoff(
@@ -812,19 +835,12 @@ class BLEMeshCoreConnection(BaseMeshCoreConnection):
             return False
 
         try:
-            # Get contacts to find the destination
-            result = await self._meshcore.commands.get_contacts()
+            await self._refresh_contacts_if_stale()
 
-            if result.type == EventType.ERROR:
-                logger.error(f"Error getting contacts: {result.payload}")
-                contact = destination
-            else:
-                # Find contact by public key prefix
-                contact = self._meshcore.get_contact_by_key_prefix(destination[:12])
-                if not contact:
-                    contact = bytes.fromhex(destination) if len(destination) == 64 else destination
+            contact = self._meshcore.get_contact_by_key_prefix(destination[:12])
+            if not contact:
+                contact = bytes.fromhex(destination) if len(destination) == 64 else destination
 
-            # Send message with retry and backoff for reliability
             config = get_config() if get_config else None
             max_attempts = config.max_send_attempts if config else 2
             retry_delay = config.send_retry_delay if config else 2.0
@@ -835,6 +851,7 @@ class BLEMeshCoreConnection(BaseMeshCoreConnection):
 
             if not send_result:
                 logger.error(f"Failed to send message to {destination[:8]}...")
+                self._invalidate_contacts_cache()
                 return False
 
             logger.debug(f"Message sent to {destination[:8]}...: {text[:30]}...")
@@ -842,6 +859,7 @@ class BLEMeshCoreConnection(BaseMeshCoreConnection):
 
         except Exception as e:
             logger.error(f"Error sending message via BLE: {e}")
+            self._invalidate_contacts_cache()
             return False
 
     async def _send_with_backoff(

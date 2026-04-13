@@ -324,7 +324,7 @@ class TestReadCommandWithReplies:
         response = await dispatcher.dispatch(f"!read {original.id}", test_sender_key)
 
         assert response is not None
-        assert "3 risposte" in response
+        assert "3 risp" in response
 
     @pytest.mark.asyncio
     async def test_read_shows_parent_info(
@@ -362,10 +362,10 @@ class TestReadCommandWithReplies:
         assert f"re: #{parent.id}" in response.lower() or "parentauthor" in response.lower()
 
     @pytest.mark.asyncio
-    async def test_read_shows_reply_hint(
+    async def test_read_response_fits_mesh_budget(
         self, db_session: Session, test_sender_key: str, test_sender_key_2: str, sample_areas: list[Area]
     ):
-        """Test /read shows reply hint."""
+        """Ensure /read stays short enough for reliable multi-hop delivery."""
         user = User(public_key=test_sender_key_2)
         db_session.add(user)
         db_session.commit()
@@ -383,7 +383,8 @@ class TestReadCommandWithReplies:
         response = await dispatcher.dispatch(f"!read {msg.id}", test_sender_key)
 
         assert response is not None
-        assert f"!reply {msg.id}" in response
+        # Short bodies should fit in ~2 mesh chunks (~280 byte).
+        assert len(response) < 300
 
 
 class TestMessageThreading:
