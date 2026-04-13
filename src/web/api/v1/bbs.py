@@ -143,6 +143,19 @@ async def send_advert(
             detail="Invio advertisement fallito",
         )
 
+    try:
+        from bbs.models.base import get_session
+        from bbs.models.activity_log import EventType, log_activity
+
+        with get_session() as session:
+            log_activity(
+                session,
+                EventType.ADVERT_SENT,
+                details=f"Manuale da web ({admin.username})",
+            )
+    except Exception:
+        pass
+
     return {
         "message": "Advertisement inviato",
         "timestamp": datetime.utcnow().isoformat(),

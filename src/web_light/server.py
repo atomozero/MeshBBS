@@ -1593,6 +1593,18 @@ def api_send_advert():
         success = future.result(timeout=15)
 
         if success:
+            try:
+                from bbs.models.base import get_session
+                from bbs.models.activity_log import EventType, log_activity
+
+                with get_session() as session:
+                    log_activity(
+                        session,
+                        EventType.ADVERT_SENT,
+                        details="Manuale da web",
+                    )
+            except Exception:
+                pass
             return json.dumps({"ok": True, "message": "Advertisement inviato"})
         else:
             return json.dumps({"ok": False, "message": "Invio fallito"})
