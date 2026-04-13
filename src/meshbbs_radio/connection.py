@@ -396,27 +396,28 @@ class MeshCoreConnection(BaseMeshCoreConnection):
     async def _send_with_backoff(
         self, contact, text: str, max_attempts: int, retry_delay: float,
     ) -> bool:
-        """Send message with retry and backoff between attempts."""
-        for attempt in range(1, max_attempts + 1):
-            try:
-                # Use simple send_msg first (faster, no ACK wait)
-                send_result = await self._meshcore.commands.send_msg(contact, text)
+        """
+        Send message via send_msg_with_retry.
 
-                if send_result.type != EventType.ERROR:
-                    return True
-            except Exception as e:
-                logger.warning(f"Send attempt {attempt}/{max_attempts} error: {e}")
-
-            if attempt < max_attempts:
-                delay = retry_delay * attempt
-                logger.warning(
-                    f"Send attempt {attempt}/{max_attempts} failed, "
-                    f"retrying in {delay}s..."
-                )
-                await asyncio.sleep(delay)
-
-        logger.error(f"All {max_attempts} send attempts failed")
-        return False
+        Delegates to meshcore's send_msg_with_retry which handles ACK waiting,
+        path reset, and automatic flood fallback when the direct path fails —
+        needed so users multiple hops away receive DM replies even when we
+        have no prior out_path for them.
+        """
+        try:
+            result = await self._meshcore.commands.send_msg_with_retry(
+                contact, text,
+                max_attempts=max_attempts,
+                max_flood_attempts=2,
+                flood_after=1,
+            )
+            if result is None:
+                logger.error("send_msg_with_retry exhausted all attempts")
+                return False
+            return True
+        except Exception as e:
+            logger.error(f"send_msg_with_retry error: {e}")
+            return False
 
     async def send_advert(self, flood: bool = False) -> bool:
         """
@@ -846,25 +847,28 @@ class BLEMeshCoreConnection(BaseMeshCoreConnection):
     async def _send_with_backoff(
         self, contact, text: str, max_attempts: int, retry_delay: float,
     ) -> bool:
-        """Send message with retry and backoff between attempts."""
-        for attempt in range(1, max_attempts + 1):
-            try:
-                send_result = await self._meshcore.commands.send_msg(contact, text)
-                if send_result.type != EventType.ERROR:
-                    return True
-            except Exception as e:
-                logger.warning(f"BLE send attempt {attempt}/{max_attempts} error: {e}")
+        """
+        Send message via send_msg_with_retry.
 
-            if attempt < max_attempts:
-                delay = retry_delay * attempt
-                logger.warning(
-                    f"BLE send attempt {attempt}/{max_attempts} failed, "
-                    f"retrying in {delay}s..."
-                )
-                await asyncio.sleep(delay)
-
-        logger.error(f"All {max_attempts} BLE send attempts failed")
-        return False
+        Delegates to meshcore's send_msg_with_retry which handles ACK waiting,
+        path reset, and automatic flood fallback when the direct path fails —
+        needed so users multiple hops away receive DM replies even when we
+        have no prior out_path for them.
+        """
+        try:
+            result = await self._meshcore.commands.send_msg_with_retry(
+                contact, text,
+                max_attempts=max_attempts,
+                max_flood_attempts=2,
+                flood_after=1,
+            )
+            if result is None:
+                logger.error("BLE send_msg_with_retry exhausted all attempts")
+                return False
+            return True
+        except Exception as e:
+            logger.error(f"BLE send_msg_with_retry error: {e}")
+            return False
 
     async def send_advert(self, flood: bool = False) -> bool:
         """
@@ -1247,18 +1251,25 @@ class TCPMeshCoreConnection(BaseMeshCoreConnection):
             return False
 
         try:
-            # Find contact by public key prefix (like the old working code)
             contact = self._meshcore.get_contact_by_key_prefix(destination[:12])
+            target = contact if contact else (
+                bytes.fromhex(destination) if len(destination) == 64 else destination
+            )
 
-            if contact:
-                # Send to resolved contact object
-                await self._meshcore.commands.send_msg(contact, text)
-                logger.info(f"SENT (contact) to={destination[:12]} len={len(text)}")
-            else:
-                # Send directly using prefix string as fallback
-                await self._meshcore.commands.send_msg(destination, text)
-                logger.info(f"SENT (prefix) to={destination[:12]} len={len(text)}")
+            config = get_config() if get_config else None
+            max_attempts = config.max_send_attempts if config else 3
 
+            result = await self._meshcore.commands.send_msg_with_retry(
+                target, text,
+                max_attempts=max_attempts,
+                max_flood_attempts=2,
+                flood_after=1,
+            )
+            if result is None:
+                logger.error(f"TCP send failed to={destination[:12]}")
+                return False
+
+            logger.info(f"SENT to={destination[:12]} len={len(text)}")
             return True
 
         except Exception as e:
