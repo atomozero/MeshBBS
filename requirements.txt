@@ -29,4 +29,4 @@ httpx>=0.26.0
 # Development
 black>=23.0.0
 isort>=5.12.0
-mypy>=1.0.0
+mypy>=1.20.2
