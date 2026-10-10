@@ -7,6 +7,8 @@ from .message import Message
 from .private_message import PrivateMessage
 from .activity_log import ActivityLog, EventType
 from .delivery_status import DeliveryStatus, DeliveryState
+from .user_prefs import UserPrefs, PendingNotification
+from .node_sighting import NodeSighting, NodeSightingDay
 
 __all__ = [
     "Base",
@@ -21,4 +23,8 @@ __all__ = [
     "EventType",
     "DeliveryStatus",
     "DeliveryState",
+    "UserPrefs",
+    "PendingNotification",
+    "NodeSighting",
+    "NodeSightingDay",
 ]

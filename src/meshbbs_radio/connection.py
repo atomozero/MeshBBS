@@ -169,6 +169,7 @@ class BaseMeshCoreConnection(ABC):
         self._contacts_last_fetch: float = 0.0
         self._meshcore: Optional[Any] = None
         self._link_lost_callback: Optional[Callable[[str], Any]] = None
+        self._advert_callback: Optional[Callable[[dict], Any]] = None
         self._dropped_messages: int = 0
 
     async def _refresh_contacts_if_stale(self) -> bool:
@@ -236,6 +237,26 @@ class BaseMeshCoreConnection(ABC):
         reports a disconnection, for immediate reconnect.
         """
         self._link_lost_callback = callback
+
+    def set_advert_callback(self, callback: Optional[Callable[[dict], Any]]) -> None:
+        """
+        Register a callback invoked for every advert heard by the companion.
+
+        It receives a dict with public_key and, when known, name, type,
+        path_len (hops, -1 = unknown), lat and lon.
+        """
+        self._advert_callback = callback
+
+    def _notify_advert(self, info: dict) -> None:
+        callback = self._advert_callback
+        if callback is None or not info.get("public_key"):
+            return
+        try:
+            result = callback(info)
+            if asyncio.iscoroutine(result):
+                asyncio.ensure_future(result)
+        except Exception as e:
+            logger.error(f"Error in advert callback: {e}")
 
     def _notify_link_lost(self, reason: str) -> None:
         """Mark the link as down and notify the registered callback."""
@@ -405,6 +426,8 @@ class _LibraryMeshCoreConnection(BaseMeshCoreConnection):
         self._subscription = None
         self._channel_subscription = None
         self._disconnect_subscription = None
+        self._advert_subscription = None
+        self._new_contact_subscription = None
         self._auto_fetch_running = False
         self._command_lock: Optional[asyncio.Lock] = None
 
@@ -568,6 +591,16 @@ class _LibraryMeshCoreConnection(BaseMeshCoreConnection):
                 self._make_disconnect_handler(mc),
             )
 
+            # Adverts heard by the companion (node history, deferred
+            # notifications). ADVERTISEMENT carries only the key; the
+            # contact details come from the contact list.
+            self._advert_subscription = mc.subscribe(
+                EventType.ADVERTISEMENT, self._on_advert_event
+            )
+            self._new_contact_subscription = mc.subscribe(
+                EventType.NEW_CONTACT, self._on_advert_event
+            )
+
             self._meshcore = mc
 
             # Load contacts now: DM replies and repeater polling need them
@@ -619,7 +652,8 @@ class _LibraryMeshCoreConnection(BaseMeshCoreConnection):
         return _on_disconnected
 
     def _reset_subscriptions(self, mc: Any) -> None:
-        for attr in ("_subscription", "_channel_subscription", "_disconnect_subscription"):
+        for attr in ("_subscription", "_channel_subscription", "_disconnect_subscription",
+                     "_advert_subscription", "_new_contact_subscription"):
             sub = getattr(self, attr)
             if sub is not None and mc is not None:
                 try:
@@ -906,6 +940,39 @@ class _LibraryMeshCoreConnection(BaseMeshCoreConnection):
 
         except Exception as e:
             logger.error(f"Error processing private message: {e}")
+
+    async def _on_advert_event(self, event: Any) -> None:
+        """Handle ADVERTISEMENT / NEW_CONTACT push events from meshcore."""
+        try:
+            data = getattr(event, "payload", None) or {}
+            if not isinstance(data, dict):
+                return
+            key = data.get("public_key", "")
+            if isinstance(key, bytes):
+                key = key.hex()
+            key = (key or "").lower()
+            if not key:
+                return
+            contact = data if "adv_name" in data else None
+            mc = self._meshcore
+            if contact is None and mc is not None:
+                try:
+                    contact = (getattr(mc, "contacts", None) or {}).get(key) or \
+                        (getattr(mc, "pending_contacts", None) or {}).get(key)
+                except Exception:
+                    contact = None
+            contact = contact or {}
+            path_len = contact.get("out_path_len")
+            self._notify_advert({
+                "public_key": key,
+                "name": contact.get("adv_name") or None,
+                "type": contact.get("type"),
+                "path_len": path_len if isinstance(path_len, int) and path_len >= 0 else None,
+                "lat": contact.get("adv_lat"),
+                "lon": contact.get("adv_lon"),
+            })
+        except Exception as e:
+            logger.error(f"Error processing advert: {e}")
 
     async def _on_channel_message(self, event: Any) -> None:
         """
