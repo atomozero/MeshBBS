@@ -13,7 +13,7 @@ from bbs.models.base import get_session, init_database
 from bbs.models.activity_log import ActivityLog, EventType, log_activity
 from bbs.commands.dispatcher import CommandDispatcher
 from bbs.rate_limiter import RateLimiter
-from bbs.services.user_keys import canonical_user_key, normalize_user_keys
+from bbs.services.user_keys import canonical_user_key
 from meshbbs_radio.connection import BaseMeshCoreConnection, MeshCoreConnection, TCPMeshCoreConnection
 from meshbbs_radio.messages import Message
 from meshbbs_radio.state import get_state_manager
@@ -203,13 +203,6 @@ class BBSCore:
         # Log startup
         with get_session() as session:
             log_activity(session, EventType.BBS_STARTED, details=self.config.bbs_name)
-
-        # Migrate users stored with full 64-char keys to the canonical form
-        try:
-            with get_session() as session:
-                normalize_user_keys(session)
-        except Exception as e:
-            logger.error(f"User key normalisation failed: {e}")
 
         self._running = True
         self._link_lost_event = asyncio.Event()

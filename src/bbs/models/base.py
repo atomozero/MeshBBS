@@ -59,15 +59,18 @@ def get_engine(db_path: str = "data/bbs.db") -> Engine:
 
 def init_database(db_path: str = "data/bbs.db") -> None:
     """
-    Initialize the database, creating all tables.
+    Initialize the database: create new tables, then apply pending schema
+    migrations (see bbs.models.migrations).
 
     Args:
         db_path: Path to SQLite database file
     """
     global _SessionFactory
+    from .migrations import run_migrations
 
     engine = get_engine(db_path)
     Base.metadata.create_all(engine)
+    run_migrations(engine)
     _SessionFactory = sessionmaker(bind=engine)
 
     # Create default areas

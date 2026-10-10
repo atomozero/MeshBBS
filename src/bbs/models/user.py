@@ -7,7 +7,7 @@ MIT License - Copyright (c) 2026 MeshBBS Contributors
 from datetime import datetime, timedelta
 from typing import Optional
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Index
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Index, func
 from sqlalchemy.orm import relationship
 
 from .base import Base
@@ -45,7 +45,17 @@ class User(Base):
     messages = relationship("Message", back_populates="author", lazy="dynamic")
 
     # Indexes
-    __table_args__ = (Index("idx_users_last_seen", "last_seen"),)
+    __table_args__ = (
+        Index("idx_users_last_seen", "last_seen"),
+        # Case-insensitive unique nickname. Existing databases get it from
+        # schema migration 2 (which first renames duplicates).
+        Index(
+            "ix_users_nickname_lower",
+            func.lower(nickname),
+            unique=True,
+            sqlite_where=nickname.isnot(None),
+        ),
+    )
 
     def __repr__(self) -> str:
         return f"<User {self.display_name} ({self.public_key[:8]}...)>"

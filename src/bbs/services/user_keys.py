@@ -12,16 +12,18 @@ The BBS therefore uses ONE canonical form for user identity: the
 lowercase 12-hex-char prefix. It is what every DM already carries, so
 existing users created by DMs keep their key unchanged.
 
-normalize_user_keys() is a safe, idempotent startup migration for rows
+normalize_user_keys() is a safe, idempotent data migration for rows
 created with a full 64-char key (e.g. by a channel "!bbs" resolved via
 contacts): they are renamed to the prefix form, or merged into the
-existing prefix user, with all references updated.
+existing prefix user, with all references updated. Keys are canonicalised
+on input, so it runs once, as schema migration 1 (bbs.models.migrations).
 """
 
 import re
-from typing import Optional
+from typing import Optional, Union
 
 from sqlalchemy import text
+from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
 try:
@@ -81,7 +83,7 @@ def _update_references(session: Session, tables: set, old: str, new: str) -> Non
         )
 
 
-def normalize_user_keys(session: Session) -> int:
+def normalize_user_keys(session: Union[Session, Connection], commit: bool = True) -> int:
     """
     Migrate users stored with a non-canonical key to the canonical form.
 
@@ -93,10 +95,15 @@ def normalize_user_keys(session: Session) -> int:
     Idempotent: a second run finds nothing to do. Only SQLite databases
     are handled (the BBS default); other dialects are skipped.
 
+    Args:
+        session: ORM Session or Core Connection
+        commit: Commit the changes (the migration runner passes False and
+            commits its own transaction)
+
     Returns:
         Number of user rows migrated
     """
-    bind = session.get_bind()
+    bind = session.get_bind() if hasattr(session, "get_bind") else session
     if bind is None or bind.dialect.name != "sqlite":
         return 0
 
@@ -173,6 +180,7 @@ def normalize_user_keys(session: Session) -> int:
         migrated += 1
 
     if migrated:
-        session.commit()
+        if commit:
+            session.commit()
         logger.info(f"User key normalisation: {migrated} user(s) migrated")
     return migrated

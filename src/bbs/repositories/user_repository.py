@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Tuple
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .base_repository import BaseRepository
@@ -160,10 +161,9 @@ class UserRepository(BaseRepository[User]):
         """
         Set nickname for a user.
 
-        Case-insensitive uniqueness is enforced here in code.
-        NOTE: there is no DB-level unique index on lower(nickname) yet; it
-        requires a migration (planned separately), so concurrent writers
-        could still race. All nickname writes must go through this method.
+        Case-insensitive uniqueness is checked here and enforced by the
+        unique index ix_users_nickname_lower: a concurrent writer that wins
+        the race makes the flush fail, reported as NicknameError.
 
         Args:
             public_key: The user's public key
@@ -186,7 +186,12 @@ class UserRepository(BaseRepository[User]):
         user = self.get_by_public_key(public_key)
         if user:
             old_nickname = user.nickname
-            user.nickname = nickname
+            try:
+                with self.session.begin_nested():
+                    user.nickname = nickname
+                    self.session.flush()
+            except IntegrityError:
+                raise NicknameError(f"Nick '{nickname}' gia in uso") from None
 
             self.session.add(
                 ActivityLog.log(
