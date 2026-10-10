@@ -183,6 +183,12 @@ fi
 
 # Step 9: Create configuration file
 print_status "Creating configuration file..."
+# Generate a random web admin password (printed once at the end of install).
+# The web panel refuses to log in with an unset or default password.
+ADMIN_PASSWORD_GEN="$(openssl rand -base64 24 2>/dev/null | tr -dc 'A-Za-z0-9' | head -c 20)"
+if [ -z "$ADMIN_PASSWORD_GEN" ]; then
+    ADMIN_PASSWORD_GEN="$(python3 -c 'import secrets; print(secrets.token_urlsafe(15))')"
+fi
 cat > "$MESHBBS_DATA/config.env" << EOF
 # MeshBBS Configuration
 # Edit this file to customize your BBS
@@ -205,9 +211,9 @@ WEB_PORT=8080
 # JWT Secret (auto-generated, keep secure!)
 JWT_SECRET=$(openssl rand -hex 32)
 
-# Admin credentials (change after first login!)
+# Admin credentials (random password generated at install time)
 ADMIN_USERNAME=admin
-ADMIN_PASSWORD=meshbbs123
+ADMIN_PASSWORD=${ADMIN_PASSWORD_GEN}
 
 # Logging
 LOG_LEVEL=INFO
@@ -320,8 +326,8 @@ echo ""
 echo "  5. Access the web interface at:"
 echo -e "     ${BLUE}http://$(hostname -I | awk '{print $1}'):8080${NC}"
 echo ""
-echo "Default credentials:"
+echo "Web admin credentials (generated randomly, shown only once):"
 echo -e "  Username: ${YELLOW}admin${NC}"
-echo -e "  Password: ${YELLOW}meshbbs123${NC}"
-echo -e "  ${RED}(Change these immediately after first login!)${NC}"
+echo -e "  Password: ${YELLOW}${ADMIN_PASSWORD_GEN}${NC}"
+echo -e "  ${RED}(Save it now! It is stored as ADMIN_PASSWORD in ${MESHBBS_DATA}/config.env)${NC}"
 echo ""

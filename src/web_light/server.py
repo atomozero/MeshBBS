@@ -7,12 +7,16 @@ Uses bottle.py (single file, zero compiled dependencies).
 MIT License - Copyright (c) 2026 MeshBBS Contributors
 """
 
+import functools
+import hmac
 import json
 import os
+import secrets
 import time
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlsplit
 
 # Import bottle from local copy
 import sys
@@ -32,20 +36,188 @@ app = Bottle()
 
 def esc(text):
     """Escape HTML special characters to prevent XSS."""
-    if not text:
+    if text is None:
         return ""
     return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;").replace("'", "&#39;")
 
-# Simple session store (in-memory, single admin)
-_sessions = {}
-_admin_password = os.environ.get("ADMIN_PASSWORD", "meshbbs123")
+
+def _js_json(obj):
+    """Serialize obj as JSON safe to embed inside an inline <script> block."""
+    return (
+        json.dumps(obj)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+        .replace(" ", "\\u2028")
+        .replace(" ", "\\u2029")
+    )
+
+
+def _js_num(value, default=0.0):
+    """Coerce a value to a finite float for safe JS embedding."""
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return default
+    if f != f or f in (float("inf"), float("-inf")):
+        return default
+    return f
+
+
+# ---------------------------------------------------------------
+# Credentials & sessions
+# ---------------------------------------------------------------
+
+# Passwords that must never be accepted (unset, shipped default, doc placeholders)
+_WEAK_PASSWORDS = {"", "meshbbs123", "CAMBIA_QUESTA_PASSWORD", "password_sicura"}
+
+_admin_password = os.environ.get("ADMIN_PASSWORD", "")
 _admin_username = os.environ.get("ADMIN_USERNAME", "admin")
 
-# Generate unique cookie secret per instance (survives restarts via env var)
-import hashlib as _hl
-_cookie_secret = os.environ.get("COOKIE_SECRET", _hl.sha256(
-    f"{_admin_password}{os.getpid()}{time.time()}".encode()
-).hexdigest())
+SESSION_COOKIE = "session"
+LOGIN_CSRF_COOKIE = "login_csrf"
+
+
+def _env_int(name, default):
+    try:
+        return int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+SESSION_TTL = max(60, _env_int("WEB_SESSION_TTL", 8 * 3600))  # idle timeout (s)
+SESSION_MAX = 100  # hard cap on concurrent sessions
+
+# sid -> {"user", "created", "last", "csrf"}
+_sessions = {}
+_sessions_lock = threading.Lock()
+
+UNSAFE_METHODS = ("POST", "PUT", "PATCH", "DELETE")
+
+
+def _login_enabled():
+    """Login is disabled while the admin password is unset or a known default."""
+    return (_admin_password or "").strip() not in _WEAK_PASSWORDS
+
+
+if not _login_enabled():
+    logger.error(
+        "Web admin login DISABLED: ADMIN_PASSWORD is not set or uses the default "
+        "value. Set a strong ADMIN_PASSWORD in config.env and restart."
+    )
+
+
+def _prune_sessions(now=None):
+    """Drop expired sessions. Caller must hold _sessions_lock."""
+    now = now or time.time()
+    for sid in [s for s, d in _sessions.items() if now - d["last"] > SESSION_TTL]:
+        del _sessions[sid]
+
+
+def _create_session(username):
+    now = time.time()
+    sid = secrets.token_urlsafe(32)
+    with _sessions_lock:
+        _prune_sessions(now)
+        if len(_sessions) >= SESSION_MAX:
+            oldest = min(_sessions, key=lambda s: _sessions[s]["last"])
+            del _sessions[oldest]
+        _sessions[sid] = {
+            "user": username,
+            "created": now,
+            "last": now,
+            "csrf": secrets.token_urlsafe(32),
+        }
+    return sid
+
+
+def _current_session():
+    """Return the session dict for the request (refreshing idle timer) or None."""
+    cached = request.environ.get("meshbbs.session")
+    if cached is not None:
+        return cached
+    sid = request.get_cookie(SESSION_COOKIE)
+    if not sid:
+        return None
+    now = time.time()
+    with _sessions_lock:
+        sess = _sessions.get(sid)
+        if sess is None:
+            return None
+        if now - sess["last"] > SESSION_TTL:
+            del _sessions[sid]
+            return None
+        sess["last"] = now
+    request.environ["meshbbs.session"] = sess
+    return sess
+
+
+def _destroy_session():
+    sid = request.get_cookie(SESSION_COOKIE)
+    if sid:
+        with _sessions_lock:
+            _sessions.pop(sid, None)
+
+
+def _is_https():
+    try:
+        return request.urlparts.scheme == "https"
+    except Exception:
+        return False
+
+
+def _set_cookie(name, value):
+    response.set_cookie(
+        name, value, path="/", httponly=True, samesite="strict", secure=_is_https()
+    )
+
+
+def _csrf_token():
+    sess = _current_session()
+    return sess["csrf"] if sess else ""
+
+
+def _origin_ok():
+    """Reject cross-site state-changing requests (Origin/Referer must match Host)."""
+    hosts = {
+        (request.environ.get(h) or "").split(",")[0].strip().lower()
+        for h in ("HTTP_HOST", "HTTP_X_FORWARDED_HOST")
+    }
+    hosts.discard("")
+    if not hosts:
+        return False
+    origin = request.environ.get("HTTP_ORIGIN")
+    if origin is not None:
+        if origin == "null":
+            return False
+        return urlsplit(origin).netloc.lower() in hosts
+    referer = request.environ.get("HTTP_REFERER")
+    if referer:
+        return urlsplit(referer).netloc.lower() in hosts
+    # No Origin/Referer (privacy settings): rely on the CSRF token alone
+    return True
+
+
+def _token_eq(a, b):
+    if not a or not b:
+        return False
+    return hmac.compare_digest(str(a).encode("utf-8"), str(b).encode("utf-8"))
+
+
+def _csrf_ok(sess):
+    sent = request.environ.get("HTTP_X_CSRF_TOKEN") or ""
+    if not sent:
+        try:
+            sent = request.forms.get("csrf_token") or ""
+        except Exception:
+            sent = ""
+    return _token_eq(sent, sess.get("csrf"))
+
+
+def _json_error(status, message, error):
+    response.status = status
+    response.content_type = "application/json"
+    return json.dumps({"ok": False, "error": error, "message": message})
 
 
 # ---------------------------------------------------------------
@@ -53,21 +225,38 @@ _cookie_secret = os.environ.get("COOKIE_SECRET", _hl.sha256(
 # ---------------------------------------------------------------
 
 def check_auth():
-    """Check if request has valid session cookie."""
-    sid = request.get_cookie("session", secret=_cookie_secret)
-    return sid in _sessions
+    """Check if request has a valid (non expired) session cookie."""
+    return _current_session() is not None
 
 
 def require_auth(func):
-    """Decorator to require authentication."""
+    """Decorator: require a valid session; enforce CSRF + Origin on unsafe methods."""
+    @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        if not check_auth():
+        sess = _current_session()
+        if sess is None:
+            if request.path.startswith("/api/"):
+                return _json_error(401, "Sessione scaduta: effettua di nuovo il login", "unauthorized")
             response.status = 303
             response.set_header("Location", "/login")
             return ""
+        if request.method in UNSAFE_METHODS:
+            if not _origin_ok():
+                logger.warning(f"Rejected cross-origin {request.method} {request.path}")
+                return _json_error(403, "Richiesta rifiutata (origine non valida)", "bad_origin")
+            if not _csrf_ok(sess):
+                logger.warning(f"Rejected {request.method} {request.path}: invalid CSRF token")
+                return _json_error(403, "Richiesta rifiutata (token CSRF non valido)", "csrf")
         return func(*args, **kwargs)
-    wrapper.__name__ = func.__name__
     return wrapper
+
+
+@app.hook("after_request")
+def _security_headers():
+    response.set_header("X-Frame-Options", "DENY")
+    response.set_header("X-Content-Type-Options", "nosniff")
+    response.set_header("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.set_header("Cache-Control", "no-store")
 
 
 # ---------------------------------------------------------------
@@ -149,6 +338,13 @@ button:hover { background: #2563eb; }
 .btn-blue:hover { background: #1e40af; }
 td.actions { white-space: nowrap; }
 
+/* Logout button styled as nav link */
+nav .links form.logout { display: inline; margin: 0; }
+nav .links form.logout button { background: none; border: none; color: #94a3b8; font-size: 0.9rem;
+    font-weight: normal; width: auto; padding: 0; margin-left: 1.5rem; cursor: pointer; }
+nav .links form.logout button:hover { color: #e2e8f0; background: none; }
+.notice { color: #fbbf24; font-size: 0.85rem; margin-bottom: 0.75rem; text-align: center; }
+
 /* Toast notification */
 .toast { position: fixed; bottom: 1rem; right: 1rem; background: #1e293b; border: 1px solid #334155;
          padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.85rem; z-index: 1000;
@@ -162,6 +358,7 @@ td.actions { white-space: nowrap; }
     nav .links { display: none; width: 100%; flex-direction: column; align-items: stretch; margin-top: 0.5rem; }
     nav .links.open { display: flex; }
     nav .links a { margin: 0; padding: 0.6rem 0; border-top: 1px solid #334155; text-align: center; }
+    nav .links form.logout button { margin: 0; padding: 0.6rem 0; width: 100%; border-top: 1px solid #334155; }
     .grid { grid-template-columns: repeat(2, 1fr); }
     .card .value { font-size: 1.3rem; }
     h1 { font-size: 1.3rem; }
@@ -174,11 +371,45 @@ td.actions { white-space: nowrap; }
 """
 
 
+# Shared client helpers (loaded in <head> so page scripts can use them).
+BASE_JS = r"""
+function csrfToken() {
+  var m = document.querySelector('meta[name="csrf-token"]');
+  return m ? m.getAttribute('content') : '';
+}
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function apiFetch(url, opts) {
+  opts = opts || {};
+  opts.credentials = 'same-origin';
+  opts.headers = opts.headers || {};
+  opts.headers['X-CSRF-Token'] = csrfToken();
+  return fetch(url, opts).then(function(r) {
+    if (r.status === 401) { location.href = '/login'; throw new Error('unauthorized'); }
+    return r;
+  });
+}
+function showToast(message, ok, delay) {
+  var ta = document.getElementById('toast-area');
+  if (!ta) return;
+  ta.textContent = '';
+  var div = document.createElement('div');
+  div.className = ok ? 'toast success' : 'toast error';
+  div.textContent = message == null ? '' : String(message);
+  ta.appendChild(div);
+  setTimeout(function() { ta.textContent = ''; }, delay || 3000);
+}
+"""
+
+
 def page(title, content, active=""):
     """Wrap content in base HTML template."""
     radio = _get_radio_status()
     conn_class = "on" if radio["connected"] else "off"
     conn_text = "Online" if radio["connected"] else "Offline"
+    csrf = _csrf_token()
 
     def nav_link(href, label, key):
         cls = "color: #e2e8f0; font-weight: 600;" if active == key else ""
@@ -189,8 +420,12 @@ def page(title, content, active=""):
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{title} - MeshBBS</title>
+<meta name="csrf-token" content="{esc(csrf)}">
+<title>{esc(title)} - MeshBBS</title>
 <style>{BASE_CSS}</style>
+<script>
+{BASE_JS}
+</script>
 </head>
 <body>
 <nav>
@@ -205,7 +440,7 @@ def page(title, content, active=""):
     {nav_link('/network', 'Rete', 'network')}
     {nav_link('/logs', 'Log', 'logs')}
     {nav_link('/settings', 'Config', 'settings')}
-    {nav_link('/logout', 'Esci', '')}
+    <form class="logout" method="POST" action="/logout"><input type="hidden" name="csrf_token" value="{esc(csrf)}"><button type="submit">Esci</button></form>
   </div>
 </div>
 </nav>
@@ -235,7 +470,7 @@ def page(title, content, active=""):
   setInterval(tick, 1000);
 
   function refreshContent() {{
-    fetch(path, {{credentials: 'same-origin'}})
+    apiFetch(path)
       .then(function(r) {{ if (r.ok) return r.text(); throw r; }})
       .then(function(html) {{
         lc.innerHTML = html;
@@ -271,81 +506,129 @@ def page(title, content, active=""):
 
 # Login rate limiting: IP -> [timestamps of failed attempts]
 _login_attempts = {}
+_login_lock = threading.Lock()
 LOGIN_MAX_ATTEMPTS = 5
 LOGIN_WINDOW = 300      # 5 minutes
 LOGIN_LOCKOUT = 900     # 15 minutes lockout
 
 
+def _prune_login_attempts(now):
+    """Drop IPs without failures in the lockout window. Caller holds _login_lock."""
+    for ip in list(_login_attempts):
+        recent = [t for t in _login_attempts[ip] if now - t < LOGIN_LOCKOUT]
+        if recent:
+            _login_attempts[ip] = recent
+        else:
+            del _login_attempts[ip]
+
+
 def _check_login_rate(ip: str) -> bool:
     """Returns True if login is allowed for this IP."""
     now = time.time()
-    if ip not in _login_attempts:
-        return True
-    attempts = _login_attempts[ip]
-    # Clean old attempts
-    attempts = [t for t in attempts if now - t < LOGIN_LOCKOUT]
-    _login_attempts[ip] = attempts
-    # Check if locked out (too many recent failures)
-    recent = [t for t in attempts if now - t < LOGIN_WINDOW]
-    return len(recent) < LOGIN_MAX_ATTEMPTS
+    with _login_lock:
+        _prune_login_attempts(now)
+        attempts = _login_attempts.get(ip, [])
+        recent = [t for t in attempts if now - t < LOGIN_WINDOW]
+        return len(recent) < LOGIN_MAX_ATTEMPTS
 
 
 def _record_login_failure(ip: str):
     """Record a failed login attempt."""
-    if ip not in _login_attempts:
-        _login_attempts[ip] = []
-    _login_attempts[ip].append(time.time())
+    with _login_lock:
+        _login_attempts.setdefault(ip, []).append(time.time())
+
+
+def _remaining_attempts(ip: str) -> int:
+    now = time.time()
+    with _login_lock:
+        recent = [t for t in _login_attempts.get(ip, []) if now - t < LOGIN_WINDOW]
+    return LOGIN_MAX_ATTEMPTS - len(recent)
+
+
+def _check_credentials(username, password):
+    """Constant-time credential check (both comparisons always evaluated)."""
+    if not _login_enabled():
+        return False
+    user_ok = hmac.compare_digest(
+        (username or "").encode("utf-8"), (_admin_username or "").encode("utf-8"))
+    pass_ok = hmac.compare_digest(
+        (password or "").encode("utf-8"), (_admin_password or "").encode("utf-8"))
+    return user_ok and pass_ok
+
+
+LOGIN_DISABLED_MSG = (
+    "Accesso web disabilitato: la password amministratore non &egrave; impostata "
+    "o &egrave; quella predefinita. Imposta <code>ADMIN_PASSWORD</code> con una "
+    "password robusta nel file <code>config.env</code> e riavvia il servizio."
+)
 
 
 @app.route("/login", method=["GET", "POST"])
 def login():
     error = ""
     client_ip = request.environ.get("REMOTE_ADDR", "unknown")
+    enabled = _login_enabled()
 
     if request.method == "POST":
-        if not _check_login_rate(client_ip):
+        form_token = request.forms.get("csrf_token", "")
+        cookie_token = request.get_cookie(LOGIN_CSRF_COOKIE)
+        if not enabled:
+            logger.error("Web login attempt refused: ADMIN_PASSWORD unset or default")
+        elif not _origin_ok() or not _token_eq(form_token, cookie_token):
+            error = "Richiesta non valida, ricarica la pagina e riprova"
+        elif not _check_login_rate(client_ip):
             error = "Troppi tentativi. Riprova tra 15 minuti"
         else:
             username = request.forms.get("username", "")
             password = request.forms.get("password", "")
 
-            if username == _admin_username and password == _admin_password:
-                import hashlib
-                sid = hashlib.sha256(f"{time.time()}{username}".encode()).hexdigest()[:32]
-                _sessions[sid] = {"user": username, "time": time.time()}
-                response.set_cookie("session", sid, secret=_cookie_secret, path="/", max_age=86400)
-                # Clear failed attempts on success
-                _login_attempts.pop(client_ip, None)
+            if _check_credentials(username, password):
+                _destroy_session()  # avoid session fixation
+                sid = _create_session(username)
+                _set_cookie(SESSION_COOKIE, sid)
+                response.delete_cookie(LOGIN_CSRF_COOKIE, path="/")
+                with _login_lock:
+                    _login_attempts.pop(client_ip, None)
                 response.status = 303
                 response.set_header("Location", "/")
                 return ""
             else:
                 _record_login_failure(client_ip)
-                remaining = LOGIN_MAX_ATTEMPTS - len([t for t in _login_attempts.get(client_ip, []) if time.time() - t < LOGIN_WINDOW])
+                remaining = _remaining_attempts(client_ip)
                 if remaining <= 0:
                     error = "Troppi tentativi. Riprova tra 15 minuti"
                 else:
                     error = f"Credenziali errate ({remaining} tentativi rimasti)"
 
+    if enabled:
+        # Pre-session CSRF token (double submit: cookie + hidden field)
+        login_token = secrets.token_urlsafe(32)
+        _set_cookie(LOGIN_CSRF_COOKIE, login_token)
+        body = f"""{'<p class="error">' + esc(error) + '</p>' if error else ''}
+<form method="POST" action="/login">
+<input type="hidden" name="csrf_token" value="{esc(login_token)}">
+<input type="text" name="username" placeholder="Username" required autocomplete="username">
+<input type="password" name="password" placeholder="Password" required autocomplete="current-password">
+<button type="submit">Accedi</button>
+</form>"""
+    else:
+        body = f'<p class="notice">{LOGIN_DISABLED_MSG}</p>'
+
     return f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Login - MeshBBS</title><style>{BASE_CSS}</style></head>
 <body><div class="login-box"><h1>MeshBBS</h1>
 <div class="card">
-{'<p class="error">' + error + '</p>' if error else ''}
-<form method="POST">
-<input type="text" name="username" placeholder="Username" required>
-<input type="password" name="password" placeholder="Password" required>
-<button type="submit">Accedi</button>
-</form></div></div></body></html>"""
+{body}
+</div></div></body></html>"""
 
 
-@app.route("/logout")
+@app.route("/logout", method="POST")
 def logout():
-    sid = request.get_cookie("session", secret=_cookie_secret)
-    if sid in _sessions:
-        del _sessions[sid]
-    response.delete_cookie("session", path="/")
+    sess = _current_session()
+    if sess is not None and _origin_ok() and _csrf_ok(sess):
+        _destroy_session()
+        response.delete_cookie(SESSION_COOKIE, path="/")
     response.status = 303
     response.set_header("Location", "/login")
     return ""
@@ -355,44 +638,46 @@ def logout():
 # Routes: Dashboard
 # ---------------------------------------------------------------
 
-@app.route("/")
-@require_auth
-def dashboard():
+def _render_dashboard_live(refresh_contacts=False):
+    """Build the auto-refreshed dashboard body (cards, alerts, radio, chart, activity)."""
     stats = _get_stats()
     radio = _get_radio_status()
 
     radio_badge = '<span class="badge badge-green">Connesso</span>' if radio["connected"] else '<span class="badge badge-red">Disconnesso</span>'
 
-    sys_info = stats.get('system', {})
+    sys_info = stats.get('system', {}) or {}
     uptime_str = _format_uptime(sys_info.get('uptime_seconds', 0))
     db_size = _format_bytes(sys_info.get('db_size_bytes', 0))
+    users_st = stats.get('users', {}) or {}
+    pub_st = (stats.get('messages', {}) or {}).get('public', {}) or {}
+    priv_st = (stats.get('messages', {}) or {}).get('private', {}) or {}
 
     cards = f"""
     <div class="grid">
         <div class="card">
             <h3>Utenti</h3>
-            <div class="value">{stats.get('users', {}).get('total', 0)}</div>
-            <div class="sub">{stats.get('users', {}).get('active_24h', 0)} attivi 24h</div>
+            <div class="value">{esc(users_st.get('total', 0))}</div>
+            <div class="sub">{esc(users_st.get('active_24h', 0))} attivi 24h</div>
         </div>
         <div class="card">
             <h3>Messaggi oggi</h3>
-            <div class="value">{stats.get('messages', {}).get('public', {}).get('today', 0)}</div>
-            <div class="sub">{stats.get('messages', {}).get('public', {}).get('total', 0)} totali</div>
+            <div class="value">{esc(pub_st.get('today', 0))}</div>
+            <div class="sub">{esc(pub_st.get('total', 0))} totali</div>
         </div>
         <div class="card">
             <h3>PM</h3>
-            <div class="value">{stats.get('messages', {}).get('private', {}).get('today', 0)}</div>
-            <div class="sub">{stats.get('messages', {}).get('private', {}).get('unread', 0)} non letti</div>
+            <div class="value">{esc(priv_st.get('today', 0))}</div>
+            <div class="sub">{esc(priv_st.get('unread', 0))} non letti</div>
         </div>
         <div class="card">
             <h3>Radio</h3>
             <div class="value">{radio_badge}</div>
-            <div class="sub">{radio.get('messages_processed', 0)} msg processati</div>
+            <div class="sub">{esc(radio.get('messages_processed', 0))} msg processati</div>
         </div>
         <div class="card">
             <h3>Uptime BBS</h3>
-            <div class="value">{uptime_str}</div>
-            <div class="sub">DB: {db_size}</div>
+            <div class="value">{esc(uptime_str)}</div>
+            <div class="sub">DB: {esc(db_size)}</div>
         </div>
     </div>
     """
@@ -407,11 +692,11 @@ def dashboard():
         <h2>Stato Radio</h2>
         <div class="card">
             <table>
-            <tr><td>Nome</td><td>{radio.get('name', 'N/A')}</td></tr>
-            <tr><td>Porta</td><td>{radio.get('port', 'N/A')}</td></tr>
-            <tr><td>Batteria</td><td>{bat_str}</td></tr>
-            <tr><td>Uptime</td><td>{_format_uptime(radio.get('uptime_seconds', 0))}</td></tr>
-            <tr><td>Messaggi</td><td>{radio.get('messages_processed', 0)}</td></tr>
+            <tr><td>Nome</td><td>{esc(radio.get('name', 'N/A'))}</td></tr>
+            <tr><td>Porta</td><td>{esc(radio.get('port', 'N/A'))}</td></tr>
+            <tr><td>Batteria</td><td>{esc(bat_str)}</td></tr>
+            <tr><td>Uptime</td><td>{esc(_format_uptime(radio.get('uptime_seconds', 0)))}</td></tr>
+            <tr><td>Messaggi</td><td>{esc(radio.get('messages_processed', 0))}</td></tr>
             </table>
             <button class="btn-sm btn-blue" style="margin-top:0.5rem" onclick="sendAdvert()">Invia Advert</button>
         </div>
@@ -436,7 +721,14 @@ def dashboard():
     </div>
     """
 
-    live_content = _render_dashboard_content(stats, radio, cards, radio_info, activity_html)
+    return _render_dashboard_content(stats, radio, cards, radio_info, activity_html,
+                                     refresh_contacts=refresh_contacts)
+
+
+@app.route("/")
+@require_auth
+def dashboard():
+    live_content = _render_dashboard_live(refresh_contacts=True)
 
     return page("Dashboard", f"""
         <h1 style="margin:1rem 0">Dashboard
@@ -455,22 +747,17 @@ def dashboard():
                 <button class="btn-sm" style="background:#334155;color:#e2e8f0" onclick="setBroadcast('0Bit BBS attivo! Scrivi !help per i comandi disponibili')">BBS attivo</button>
                 <button class="btn-sm" style="background:#334155;color:#e2e8f0" onclick="setBroadcast('Benvenuti su 0Bit BBS! Messaggi, news, meteo e trivia via mesh LoRa')">Benvenuto</button>
                 <button class="btn-sm" style="background:#334155;color:#e2e8f0" onclick="setBroadcast('Prova il quiz !trivia e scala la classifica! Sfida gli altri nodi')">Trivia</button>
-                <button class="btn-sm" style="background:#334155;color:#e2e8f0" onclick="setBroadcast('Notizie in tempo reale con !news. Meteo con !meteo <citta>')">News e Meteo</button>
-                <button class="btn-sm" style="background:#334155;color:#e2e8f0" onclick="setBroadcast('Bacheca annunci attiva! Scrivi !board post <testo> per pubblicare')">Bacheca</button>
+                <button class="btn-sm" style="background:#334155;color:#e2e8f0" onclick="setBroadcast('Notizie in tempo reale con !news. Meteo con !meteo &lt;citta&gt;')">News e Meteo</button>
+                <button class="btn-sm" style="background:#334155;color:#e2e8f0" onclick="setBroadcast('Bacheca annunci attiva! Scrivi !board post &lt;testo&gt; per pubblicare')">Bacheca</button>
             </div>
             <div style="font-size:0.7rem;color:#64748b;margin-top:0.4rem">Clicca un messaggio preimpostato o scrivi il tuo</div>
         </div>
         </div>
         <script>
         function sendAdvert() {{
-            fetch('/api/advert', {{method:'POST', credentials:'same-origin'}})
+            apiFetch('/api/advert', {{method:'POST'}})
             .then(function(r) {{ return r.json(); }})
-            .then(function(d) {{
-                var ta = document.getElementById('toast-area');
-                var cls = d.ok ? 'toast success' : 'toast error';
-                ta.innerHTML = '<div class="' + cls + '">' + d.message + '</div>';
-                setTimeout(function(){{ ta.innerHTML = ''; }}, 3000);
-            }})
+            .then(function(d) {{ showToast(d.message, d.ok); }})
             .catch(function(){{ alert('Errore di rete'); }});
         }}
         function setBroadcast(text) {{
@@ -480,19 +767,15 @@ def dashboard():
             var msg = document.getElementById('broadcast-msg').value.trim();
             if (!msg) {{ alert('Scrivi un messaggio'); return; }}
             if (!confirm('Inviare sul canale pubblico?\\n\\n' + msg)) return;
-            fetch('/api/broadcast', {{
+            apiFetch('/api/broadcast', {{
                 method: 'POST',
-                credentials: 'same-origin',
                 headers: {{'Content-Type': 'application/json'}},
                 body: JSON.stringify({{message: msg}})
             }})
             .then(function(r) {{ return r.json(); }})
             .then(function(d) {{
-                var ta = document.getElementById('toast-area');
-                var cls = d.ok ? 'toast success' : 'toast error';
-                ta.innerHTML = '<div class="' + cls + '">' + d.message + '</div>';
+                showToast(d.message, d.ok);
                 if (d.ok) document.getElementById('broadcast-msg').value = '';
-                setTimeout(function(){{ ta.innerHTML = ''; }}, 3000);
             }})
             .catch(function(){{ alert('Errore di rete'); }});
         }}
@@ -500,96 +783,54 @@ def dashboard():
     """, active="dashboard")
 
 
-def _render_dashboard_content(stats, radio, cards, radio_info, activity_html):
+def _render_dashboard_content(stats, radio, cards, radio_info, activity_html,
+                              refresh_contacts=False):
     """Render the dashboard inner content (used by both full page and partial)."""
     chart_html = _render_activity_chart()
-    alert_html = _render_repeater_alerts()
+    alert_html = _render_repeater_alerts(refresh_contacts=refresh_contacts)
     return f"{cards}{alert_html}{radio_info}{chart_html}{activity_html}"
 
 
 @app.route("/api/partial/dashboard")
 @require_auth
 def partial_dashboard():
-    """Return dashboard HTML fragment for live refresh."""
-    stats = _get_stats()
-    radio = _get_radio_status()
-
-    radio_badge = '<span class="badge badge-green">Connesso</span>' if radio["connected"] else '<span class="badge badge-red">Disconnesso</span>'
-
-    cards = f"""
-    <div class="grid">
-        <div class="card">
-            <h3>Utenti</h3>
-            <div class="value">{stats.get('users', {}).get('total', 0)}</div>
-            <div class="sub">{stats.get('users', {}).get('active_24h', 0)} attivi 24h</div>
-        </div>
-        <div class="card">
-            <h3>Messaggi oggi</h3>
-            <div class="value">{stats.get('messages', {}).get('public', {}).get('today', 0)}</div>
-            <div class="sub">{stats.get('messages', {}).get('public', {}).get('total', 0)} totali</div>
-        </div>
-        <div class="card">
-            <h3>PM</h3>
-            <div class="value">{stats.get('messages', {}).get('private', {}).get('today', 0)}</div>
-            <div class="sub">{stats.get('messages', {}).get('private', {}).get('unread', 0)} non letti</div>
-        </div>
-        <div class="card">
-            <h3>Radio</h3>
-            <div class="value">{radio_badge}</div>
-            <div class="sub">{radio.get('messages_processed', 0)} msg processati</div>
-        </div>
-    </div>
-    """
-
-    radio_info = ""
-    if radio["connected"]:
-        battery = radio.get("battery_level")
-        bat_str = f"{battery}%" if battery is not None else "N/A"
-        radio_info = f"""
-        <div class="section">
-        <h2>Stato Radio</h2>
-        <div class="card">
-            <table>
-            <tr><td>Nome</td><td>{radio.get('name', 'N/A')}</td></tr>
-            <tr><td>Porta</td><td>{radio.get('port', 'N/A')}</td></tr>
-            <tr><td>Batteria</td><td>{bat_str}</td></tr>
-            <tr><td>Uptime</td><td>{_format_uptime(radio.get('uptime_seconds', 0))}</td></tr>
-            <tr><td>Messaggi</td><td>{radio.get('messages_processed', 0)}</td></tr>
-            </table>
-            <button class="btn-sm btn-blue" style="margin-top:0.5rem" onclick="sendAdvert()">Invia Advert</button>
-        </div>
-        </div>
-        """
-
-    activity = _get_recent_activity(10)
-    act_rows = ""
-    for item in activity:
-        act_rows += f'<tr><td>{esc(item["time"])}</td><td>{esc(item["event"])}</td><td>{esc(item["details"])}</td></tr>'
-
-    activity_html = f"""
-    <div class="section">
-    <h2>Attivita recente</h2>
-    <div class="card">
-        <table>
-        <tr><th>Ora</th><th>Evento</th><th>Dettagli</th></tr>
-        {act_rows if act_rows else '<tr><td colspan="3" style="text-align:center;color:#64748b">Nessuna attivita</td></tr>'}
-        </table>
-    </div>
-    </div>
-    """
-
-    return _render_dashboard_content(stats, radio, cards, radio_info, activity_html)
+    """Return dashboard HTML fragment for live refresh (never queries the radio)."""
+    return _render_dashboard_live(refresh_contacts=False)
 
 
 # ---------------------------------------------------------------
 # Partial routes for other pages
 # ---------------------------------------------------------------
 
+def _page_param(name="p"):
+    """Parse a 1-based page number from the query string (invalid -> 1)."""
+    try:
+        return max(1, min(int(request.params.get(name, 1)), 1_000_000))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _pagination_html(base, page_num, total_pages):
+    if total_pages <= 1:
+        return ""
+    links = []
+    if page_num > 1:
+        links.append(f'<a href="{base}?p={page_num - 1}">&laquo; Prec</a>')
+    links.append(f'<span style="color:#94a3b8">Pagina {page_num}/{total_pages}</span>')
+    if page_num < total_pages:
+        links.append(f'<a href="{base}?p={page_num + 1}">Succ &raquo;</a>')
+    return f'<div style="margin-top:0.75rem;text-align:center;font-size:0.85rem">{" &middot; ".join(links)}</div>'
+
+
+MESSAGES_PER_PAGE = 25
+USERS_PER_PAGE = 50
+
+
 @app.route("/api/partial/messages")
 @require_auth
 def partial_messages():
     """Return messages table HTML fragment."""
-    messages = _get_recent_messages(25)
+    messages, _ = _get_messages_paginated(_page_param(), MESSAGES_PER_PAGE)
     rows = _render_message_rows(messages)
     return f"""<table>
     <tr><th>ID</th><th>Autore</th><th>Area</th><th>Messaggio</th><th>Data</th><th></th></tr>
@@ -601,12 +842,24 @@ def partial_messages():
 @require_auth
 def partial_users():
     """Return users table HTML fragment."""
-    users = _get_users()
+    users, _ = _get_users_paginated(_page_param(), USERS_PER_PAGE)
     rows = _render_user_rows(users)
     return f"""<table>
     <tr><th>Nome</th><th>Chiave</th><th>Stato</th><th>Msg</th><th>Visto</th><th>Azioni</th></tr>
     {rows if rows else '<tr><td colspan="6" style="text-align:center;color:#64748b">Nessun utente</td></tr>'}
     </table>"""
+
+
+def _render_log_rows(logs):
+    rows = ""
+    for log_entry in logs:
+        rows += f"""<tr>
+            <td>{esc(log_entry['time'])}</td>
+            <td>{esc(log_entry['type'])}</td>
+            <td>{esc(log_entry.get('user', ''))}</td>
+            <td>{esc(log_entry.get('details', ''))}</td>
+        </tr>"""
+    return rows
 
 
 @app.route("/api/partial/logs")
@@ -617,14 +870,7 @@ def partial_logs():
     if filter_mode not in ("events", "commands", "all"):
         filter_mode = "events"
     logs = _get_logs(100 if filter_mode == "commands" else 50, filter_mode)
-    rows = ""
-    for log_entry in logs:
-        rows += f"""<tr>
-            <td>{log_entry['time']}</td>
-            <td>{esc(log_entry['type'])}</td>
-            <td>{esc(log_entry.get('user', ''))}</td>
-            <td>{esc(log_entry.get('details', ''))}</td>
-        </tr>"""
+    rows = _render_log_rows(logs)
     return f"""<table>
     <tr><th>Data</th><th>Tipo</th><th>Utente</th><th>Dettagli</th></tr>
     {rows if rows else '<tr><td colspan="4" style="text-align:center;color:#64748b">Nessun log</td></tr>'}
@@ -638,21 +884,15 @@ def partial_logs():
 @app.route("/messages")
 @require_auth
 def messages_page():
-    page_num = int(request.params.get("p", 1))
-    per_page = 25
+    page_num = _page_param()
+    per_page = MESSAGES_PER_PAGE
     messages, total = _get_messages_paginated(page_num, per_page)
-    rows = _render_message_rows(messages)
     total_pages = max(1, (total + per_page - 1) // per_page)
-
-    pagination = ""
-    if total_pages > 1:
-        links = []
-        if page_num > 1:
-            links.append(f'<a href="/messages?p={page_num - 1}">&laquo; Prec</a>')
-        links.append(f'<span style="color:#94a3b8">Pagina {page_num}/{total_pages}</span>')
-        if page_num < total_pages:
-            links.append(f'<a href="/messages?p={page_num + 1}">Succ &raquo;</a>')
-        pagination = f'<div style="margin-top:0.75rem;text-align:center;font-size:0.85rem">{" &middot; ".join(links)}</div>'
+    if page_num > total_pages:
+        page_num = total_pages
+        messages, total = _get_messages_paginated(page_num, per_page)
+    rows = _render_message_rows(messages)
+    pagination = _pagination_html("/messages", page_num, total_pages)
 
     return page("Messaggi", f"""
         <h1 style="margin:1rem 0">Messaggi
@@ -667,17 +907,19 @@ def messages_page():
         </div></div>
         {pagination}
         <script>
+        document.getElementById('live-content').addEventListener('click', function(ev) {{
+            var b = ev.target.closest ? ev.target.closest('button[data-msg-id]') : null;
+            if (b) deleteMsg(b.getAttribute('data-msg-id'));
+        }});
         function deleteMsg(id) {{
-            if (!confirm('Eliminare messaggio #' + id + '?')) return;
-            fetch('/api/message/' + id, {{method:'DELETE', credentials:'same-origin'}})
+            id = parseInt(id, 10);
+            if (!id || !confirm('Eliminare messaggio #' + id + '?')) return;
+            apiFetch('/api/message/' + id, {{method:'DELETE'}})
             .then(function(r) {{ return r.json(); }})
             .then(function(d) {{
-                var ta = document.getElementById('toast-area');
-                var cls = d.ok ? 'toast success' : 'toast error';
-                ta.innerHTML = '<div class="' + cls + '">' + d.message + '</div>';
-                setTimeout(function(){{ ta.innerHTML = ''; }}, 3000);
+                showToast(d.message, d.ok);
                 if (d.ok) {{
-                    fetch('/api/partial/messages', {{credentials:'same-origin'}})
+                    apiFetch('/api/partial/messages' + location.search)
                     .then(function(r){{ return r.text(); }})
                     .then(function(h){{ document.getElementById('live-content').innerHTML = h; }});
                 }}
@@ -692,13 +934,15 @@ def _render_message_rows(messages):
     """Render message table rows with delete button."""
     rows = ""
     for msg in messages:
+        body = msg['body'] or ""
+        msg_id = int(msg['id'])
         rows += f"""<tr>
-            <td>#{msg['id']}</td>
+            <td>#{msg_id}</td>
             <td>{esc(msg['author'])}</td>
             <td>{esc(msg['area'])}</td>
-            <td class="wrap">{esc(msg['body'][:60])}{'...' if len(msg['body']) > 60 else ''}</td>
-            <td>{msg['time']}</td>
-            <td class="actions"><button class="btn-sm btn-red" onclick="deleteMsg({msg['id']})">X</button></td>
+            <td class="wrap">{esc(body[:60])}{'...' if len(body) > 60 else ''}</td>
+            <td>{esc(msg['time'])}</td>
+            <td class="actions"><button class="btn-sm btn-red" data-msg-id="{msg_id}">X</button></td>
         </tr>"""
     return rows
 
@@ -710,8 +954,15 @@ def _render_message_rows(messages):
 @app.route("/users")
 @require_auth
 def users_page():
-    users = _get_users()
+    page_num = _page_param()
+    per_page = USERS_PER_PAGE
+    users, total = _get_users_paginated(page_num, per_page)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    if page_num > total_pages:
+        page_num = total_pages
+        users, total = _get_users_paginated(page_num, per_page)
     rows = _render_user_rows(users)
+    pagination = _pagination_html("/users", page_num, total_pages)
 
     return page("Utenti", f"""
         <h1 style="margin:1rem 0">Utenti
@@ -724,6 +975,7 @@ def users_page():
         {rows if rows else '<tr><td colspan="6" style="text-align:center;color:#64748b">Nessun utente</td></tr>'}
         </table>
         </div></div>
+        {pagination}
         <div class="section" id="send-msg-section" style="display:none">
         <h2>Invia messaggio a <span id="send-msg-name"></span></h2>
         <div class="card">
@@ -736,18 +988,30 @@ def users_page():
         </div>
         </div>
         <script>
+        // Delegated handler: survives live refresh of #live-content.
+        // Data comes from data-* attributes (HTML-escaped server side), never from inline JS.
+        document.getElementById('live-content').addEventListener('click', function(ev) {{
+            var b = ev.target.closest ? ev.target.closest('button[data-key]') : null;
+            if (!b) return;
+            var key = b.getAttribute('data-key');
+            if (b.hasAttribute('data-send')) {{
+                showSendMsg(key, b.getAttribute('data-name') || '');
+            }} else if (b.hasAttribute('data-action')) {{
+                userAction(key, b.getAttribute('data-action'));
+            }}
+        }});
+        function refreshUsers() {{
+            apiFetch('/api/partial/users' + location.search)
+            .then(function(r){{ return r.text(); }})
+            .then(function(h){{ document.getElementById('live-content').innerHTML = h; }});
+        }}
         function userAction(key, action) {{
             if (!confirm('Confermi ' + action + ' per questo utente?')) return;
-            fetch('/api/user/' + key + '/' + action, {{method:'POST', credentials:'same-origin'}})
+            apiFetch('/api/user/' + encodeURIComponent(key) + '/' + encodeURIComponent(action), {{method:'POST'}})
             .then(function(r) {{ return r.json(); }})
             .then(function(d) {{
-                var ta = document.getElementById('toast-area');
-                var cls = d.ok ? 'toast success' : 'toast error';
-                ta.innerHTML = '<div class="' + cls + '">' + d.message + '</div>';
-                setTimeout(function(){{ ta.innerHTML = ''; }}, 3000);
-                fetch('/api/partial/users', {{credentials:'same-origin'}})
-                .then(function(r){{ return r.text(); }})
-                .then(function(h){{ document.getElementById('live-content').innerHTML = h; }});
+                showToast(d.message, d.ok);
+                refreshUsers();
             }})
             .catch(function(){{ alert('Errore di rete'); }});
         }}
@@ -765,18 +1029,14 @@ def users_page():
             var key = document.getElementById('send-msg-key').value;
             var text = document.getElementById('send-msg-text').value.trim();
             if (!text) {{ alert('Scrivi un messaggio'); return; }}
-            fetch('/api/send-message', {{
+            apiFetch('/api/send-message', {{
                 method: 'POST',
-                credentials: 'same-origin',
                 headers: {{'Content-Type': 'application/json'}},
                 body: JSON.stringify({{recipient_key: key, text: text}})
             }})
             .then(function(r) {{ return r.json(); }})
             .then(function(d) {{
-                var ta = document.getElementById('toast-area');
-                var cls = d.ok ? 'toast success' : 'toast error';
-                ta.innerHTML = '<div class="' + cls + '">' + d.message + '</div>';
-                setTimeout(function(){{ ta.innerHTML = ''; }}, 3000);
+                showToast(d.message, d.ok);
                 if (d.ok) cancelSendMsg();
             }})
             .catch(function(){{ alert('Errore di rete'); }});
@@ -786,7 +1046,10 @@ def users_page():
 
 
 def _render_user_rows(users):
-    """Render user table rows with action buttons."""
+    """Render user table rows with action buttons (data-* attributes, no inline JS)."""
+    def btn(cls, action, label, key_attr):
+        return f'<button class="btn-sm {cls}" data-key="{key_attr}" data-action="{action}">{label}</button>'
+
     rows = ""
     for u in users:
         status = ""
@@ -799,40 +1062,41 @@ def _render_user_rows(users):
         elif u.get("moderator"):
             status = '<span class="badge badge-blue">Mod</span>'
 
-        # Action buttons based on current status
-        key = u['key']
-        actions = ""
+        key = str(u.get('key') or "")
+        k = esc(key)
         if u.get("banned"):
-            actions = f'<button class="btn-sm btn-green" onclick="userAction(\'{key}\',\'unban\')">Sbanna</button>'
+            actions = btn("btn-green", "unban", "Sbanna", k)
         elif u.get("muted"):
-            actions = f'<button class="btn-sm btn-green" onclick="userAction(\'{key}\',\'unmute\')">Smuta</button>'
+            actions = btn("btn-green", "unmute", "Smuta", k)
         elif u.get("admin"):
-            actions = f'<button class="btn-sm btn-red" onclick="userAction(\'{key}\',\'demote\')">Declassa</button>'
+            actions = btn("btn-red", "demote", "Declassa", k)
         elif u.get("moderator"):
             actions = (
-                f'<button class="btn-sm btn-green" onclick="userAction(\'{key}\',\'promote_admin\')">Admin</button>'
-                f'<button class="btn-sm btn-red" onclick="userAction(\'{key}\',\'demote\')">Declassa</button>'
-                f'<button class="btn-sm btn-yellow" onclick="userAction(\'{key}\',\'mute\')">Mute</button>'
+                btn("btn-green", "promote_admin", "Admin", k)
+                + btn("btn-red", "demote", "Declassa", k)
+                + btn("btn-yellow", "mute", "Mute", k)
             )
         else:
             actions = (
-                f'<button class="btn-sm btn-green" onclick="userAction(\'{key}\',\'promote\')">Mod</button>'
-                f'<button class="btn-sm btn-red" onclick="userAction(\'{key}\',\'ban\')">Ban</button>'
-                f'<button class="btn-sm btn-yellow" onclick="userAction(\'{key}\',\'mute\')">Mute</button>'
-                f'<button class="btn-sm btn-blue" onclick="userAction(\'{key}\',\'kick\')">Kick</button>'
+                btn("btn-green", "promote", "Mod", k)
+                + btn("btn-red", "ban", "Ban", k)
+                + btn("btn-yellow", "mute", "Mute", k)
+                + btn("btn-blue", "kick", "Kick", k)
             )
 
-        # Add send message button for all non-banned users
-        name_escaped = esc(u['name']).replace("'", "\\'")
+        # Send message button for all non-banned users
         if not u.get("banned"):
-            actions += f' <button class="btn-sm btn-blue" onclick="showSendMsg(\'{key}\',\'{name_escaped}\')">Scrivi</button>'
+            actions += (
+                f' <button class="btn-sm btn-blue" data-key="{k}" data-send="1" '
+                f'data-name="{esc(u.get("name"))}">Scrivi</button>'
+            )
 
         rows += f"""<tr>
-            <td>{esc(u['name'])}</td>
-            <td><code>{key[:8]}...</code></td>
+            <td>{esc(u.get('name'))}</td>
+            <td><code>{esc(key[:8])}...</code></td>
             <td>{status}</td>
-            <td>{u['messages']}</td>
-            <td>{esc(u['last_seen'])}</td>
+            <td>{esc(u.get('messages', 0))}</td>
+            <td>{esc(u.get('last_seen'))}</td>
             <td class="actions">{actions}</td>
         </tr>"""
     return rows
@@ -845,18 +1109,26 @@ def _render_user_rows(users):
 @app.route("/network")
 @require_auth
 def network_page():
-    nodes = _get_mesh_nodes()
+    nodes = _get_mesh_nodes(refresh=True)
     rows = _render_network_rows(nodes)
 
-    # Build nodes JSON for the map
-    geo_nodes = [n for n in nodes if "lat" in n and "lon" in n]
-    nodes_json = json.dumps(geo_nodes)
+    # Build nodes JSON for the map (only the fields the map needs, coords as numbers)
+    geo_nodes = []
+    for n in nodes:
+        if "lat" in n and "lon" in n:
+            lat, lon = _js_num(n["lat"], None), _js_num(n["lon"], None)
+            if lat is None or lon is None:
+                continue
+            geo_nodes.append({"name": str(n.get("name", "")), "type": str(n.get("type", "")),
+                              "path": str(n.get("path", "")), "lat": lat, "lon": lon})
+    nodes_json = _js_json(geo_nodes)
 
     # BBS own position from config
     from utils.config import get_config
     cfg = get_config()
-    bbs_lat = cfg.latitude or 0
-    bbs_lon = cfg.longitude or 0
+    bbs_lat = _js_num(cfg.latitude or 0)
+    bbs_lon = _js_num(cfg.longitude or 0)
+    bbs_name_json = _js_json(str(getattr(cfg, "bbs_name", "") or "BBS"))
 
     # Determine map center
     if bbs_lat and bbs_lon:
@@ -907,7 +1179,7 @@ def network_page():
             if (bbsLat && bbsLon) {{
                 L.marker([bbsLat,bbsLon], {{icon: makeIcon('#ef4444')}})
                  .addTo(map)
-                 .bindPopup('<b>{cfg.bbs_name}</b><br>BBS');
+                 .bindPopup('<b>' + escapeHtml({bbs_name_json}) + '</b><br>BBS');
             }}
 
             // Mesh nodes
@@ -919,7 +1191,7 @@ def network_page():
                 var c = colors[n.type] || '#94a3b8';
                 L.marker([n.lat,n.lon], {{icon: makeIcon(c)}})
                  .addTo(map)
-                 .bindPopup('<b>'+n.name+'</b><br>'+n.type+'<br>'+n.path);
+                 .bindPopup('<b>' + escapeHtml(n.name) + '</b><br>' + escapeHtml(n.type) + '<br>' + escapeHtml(n.path));
                 bounds.push([n.lat,n.lon]);
             }});
 
@@ -988,11 +1260,14 @@ def _render_network_rows(nodes):
         if t not in groups:
             continue
         label = type_labels.get(t, t)
-        badge = type_badges.get(t, f'<span class="badge">{t}</span>')
-        rows += f'<tr><td colspan="5" style="padding-top:1rem"><strong>{badge} {label} ({len(groups[t])})</strong></td></tr>'
+        badge = type_badges.get(t, f'<span class="badge">{esc(t)}</span>')
+        rows += f'<tr><td colspan="5" style="padding-top:1rem"><strong>{badge} {esc(label)} ({len(groups[t])})</strong></td></tr>'
         for n in groups[t]:
             path = n.get("path", "")
-            hops = n.get("hops", 0)
+            try:
+                hops = int(n.get("hops", 0) or 0)
+            except (TypeError, ValueError):
+                hops = 0
             hop_badge = f'<span class="badge" style="background:#334155;color:#94a3b8">{hops}h</span>' if hops > 0 else '<span class="badge badge-green">0h</span>'
             gps = ""
             if "lat" in n and "lon" in n:
@@ -1001,7 +1276,7 @@ def _render_network_rows(nodes):
                 <td>{esc(n['name'])}{gps}</td>
                 <td>{badge}</td>
                 <td>{hop_badge}</td>
-                <td><code>{n['key'][:12]}...</code></td>
+                <td><code>{esc(str(n.get('key', ''))[:12])}...</code></td>
                 <td class="wrap">{esc(path)}</td>
             </tr>"""
 
@@ -1019,6 +1294,7 @@ def _render_repeater_telemetry():
         if not snapshot:
             return ""
     except Exception:
+        logger.warning("Repeater telemetry unavailable", exc_info=True)
         return ""
 
     rows = ""
@@ -1044,9 +1320,9 @@ def _render_repeater_telemetry():
         rows += f"""<tr>
             <td><strong>{name}</strong></td>
             <td>{status_badge}</td>
-            <td>{bat_txt}</td>
-            <td>{uptime_txt}</td>
-            <td>{airtime_txt}</td>
+            <td>{esc(bat_txt)}</td>
+            <td>{esc(uptime_txt)}</td>
+            <td>{esc(airtime_txt)}</td>
             <td style="font-size:0.7rem;color:#64748b">{esc(str(ts))}</td>
         </tr>"""
 
@@ -1069,12 +1345,12 @@ def _render_repeater_telemetry():
 @app.route("/api/partial/network")
 @require_auth
 def partial_network():
-    """Return network table HTML fragment."""
-    nodes = _get_mesh_nodes()
+    """Return network table HTML fragment (never queries the radio)."""
+    nodes = _get_mesh_nodes(refresh=False)
     rows = _render_network_rows(nodes)
     return f"""<table>
-    <tr><th>Nome</th><th>Tipo</th><th>Chiave</th><th>Percorso</th></tr>
-    {rows if rows else '<tr><td colspan="4" style="text-align:center;color:#64748b">Nessun nodo visibile</td></tr>'}
+    <tr><th>Nome</th><th>Tipo</th><th>Hop</th><th>Chiave</th><th>Percorso</th></tr>
+    {rows if rows else '<tr><td colspan="5" style="text-align:center;color:#64748b">Nessun nodo visibile</td></tr>'}
     </table>"""
 
 
@@ -1090,15 +1366,7 @@ def logs_page():
         filter_mode = "events"
 
     logs = _get_logs(100 if filter_mode == "commands" else 50, filter_mode)
-
-    rows = ""
-    for log_entry in logs:
-        rows += f"""<tr>
-            <td>{log_entry['time']}</td>
-            <td>{esc(log_entry['type'])}</td>
-            <td>{esc(log_entry.get('user', ''))}</td>
-            <td>{esc(log_entry.get('details', ''))}</td>
-        </tr>"""
+    rows = _render_log_rows(logs)
 
     def tab(val, label):
         active_class = "badge-green" if filter_mode == val else "badge"
@@ -1143,39 +1411,39 @@ def settings_page():
             <div class="card">
                 <h3>BBS</h3>
                 <label style="font-size:0.8rem;color:#94a3b8">Nome BBS</label>
-                <input type="text" name="bbs_name" value="{cfg.bbs_name}" style="margin-bottom:0.5rem">
+                <input type="text" name="bbs_name" value="{esc(cfg.bbs_name)}" style="margin-bottom:0.5rem">
                 <label style="font-size:0.8rem;color:#94a3b8">Prefisso risposte</label>
-                <input type="text" name="response_prefix" value="{cfg.response_prefix}" style="margin-bottom:0.5rem">
+                <input type="text" name="response_prefix" value="{esc(cfg.response_prefix)}" style="margin-bottom:0.5rem">
                 <label style="font-size:0.8rem;color:#94a3b8">Area predefinita</label>
-                <input type="text" name="default_area" value="{cfg.default_area}" style="margin-bottom:0.5rem">
+                <input type="text" name="default_area" value="{esc(cfg.default_area)}" style="margin-bottom:0.5rem">
             </div>
             <div class="card">
                 <h3>Posizione</h3>
                 <label style="font-size:0.8rem;color:#94a3b8">Latitudine</label>
-                <input type="text" name="latitude" value="{cfg.latitude or ''}" placeholder="45.4986" style="margin-bottom:0.5rem">
+                <input type="text" name="latitude" value="{esc(cfg.latitude or '')}" placeholder="45.4986" style="margin-bottom:0.5rem">
                 <label style="font-size:0.8rem;color:#94a3b8">Longitudine</label>
-                <input type="text" name="longitude" value="{cfg.longitude or ''}" placeholder="12.2459" style="margin-bottom:0.5rem">
+                <input type="text" name="longitude" value="{esc(cfg.longitude or '')}" placeholder="12.2459" style="margin-bottom:0.5rem">
             </div>
             <div class="card">
                 <h3>Invio messaggi</h3>
                 <label style="font-size:0.8rem;color:#94a3b8">Delay tra chunk (sec)</label>
-                <input type="text" name="send_delay" value="{cfg.send_delay}" style="margin-bottom:0.5rem">
+                <input type="text" name="send_delay" value="{esc(cfg.send_delay)}" style="margin-bottom:0.5rem">
                 <label style="font-size:0.8rem;color:#94a3b8">Advert ogni (min)</label>
-                <input type="text" name="advert_interval_minutes" value="{cfg.advert_interval_minutes}" style="margin-bottom:0.5rem">
+                <input type="text" name="advert_interval_minutes" value="{esc(cfg.advert_interval_minutes)}" style="margin-bottom:0.5rem">
             </div>
             <div class="card">
                 <h3>Beacon</h3>
                 <label style="font-size:0.8rem;color:#94a3b8">Intervallo beacon (min, 0=off)</label>
-                <input type="text" name="beacon_interval" value="{cfg.beacon_interval}" style="margin-bottom:0.5rem">
+                <input type="text" name="beacon_interval" value="{esc(cfg.beacon_interval)}" style="margin-bottom:0.5rem">
                 <label style="font-size:0.8rem;color:#94a3b8">Messaggio beacon</label>
-                <input type="text" name="beacon_message" value="{cfg.beacon_message}" style="margin-bottom:0.5rem">
+                <input type="text" name="beacon_message" value="{esc(cfg.beacon_message)}" style="margin-bottom:0.5rem">
             </div>
             <div class="card">
                 <h3>Retention</h3>
                 <label style="font-size:0.8rem;color:#94a3b8">PM retention (giorni, 0=infinito)</label>
-                <input type="text" name="pm_retention_days" value="{cfg.pm_retention_days}" style="margin-bottom:0.5rem">
+                <input type="text" name="pm_retention_days" value="{esc(cfg.pm_retention_days)}" style="margin-bottom:0.5rem">
                 <label style="font-size:0.8rem;color:#94a3b8">Log retention (giorni)</label>
-                <input type="text" name="activity_log_retention_days" value="{cfg.activity_log_retention_days}" style="margin-bottom:0.5rem">
+                <input type="text" name="activity_log_retention_days" value="{esc(cfg.activity_log_retention_days)}" style="margin-bottom:0.5rem">
             </div>
         </div>
         <button type="submit" style="margin-top:1rem;max-width:200px">Salva</button>
@@ -1205,7 +1473,7 @@ def settings_page():
         <script>
         // Load companion time on page load
         (function(){{
-            fetch('/api/companion-time', {{credentials:'same-origin'}})
+            apiFetch('/api/companion-time')
             .then(function(r){{ return r.json(); }})
             .then(function(d){{
                 if (d.ok) {{
@@ -1227,13 +1495,11 @@ def settings_page():
 
         function syncTime() {{
             if (!confirm('Sincronizzare orologio companion con ora Pi?')) return;
-            fetch('/api/companion-time/sync', {{method:'POST', credentials:'same-origin'}})
+            apiFetch('/api/companion-time/sync', {{method:'POST'}})
             .then(function(r){{ return r.json(); }})
             .then(function(d){{
-                var ta = document.getElementById('toast-area');
-                var cls = d.ok ? 'toast success' : 'toast error';
-                ta.innerHTML = '<div class="' + cls + '">' + d.message + '</div>';
-                setTimeout(function(){{ ta.innerHTML = ''; location.reload(); }}, 2000);
+                showToast(d.message, d.ok, 2000);
+                setTimeout(function(){{ location.reload(); }}, 2000);
             }})
             .catch(function(){{ alert('Errore di rete'); }});
         }}
@@ -1247,19 +1513,13 @@ def settings_page():
                 var v = inp.value.trim();
                 if (v !== '') data[inp.name] = v;
             }});
-            fetch('/api/settings', {{
+            apiFetch('/api/settings', {{
                 method: 'POST',
-                credentials: 'same-origin',
                 headers: {{'Content-Type': 'application/json'}},
                 body: JSON.stringify(data)
             }})
             .then(function(r) {{ return r.json(); }})
-            .then(function(d) {{
-                var ta = document.getElementById('toast-area');
-                var cls = d.ok ? 'toast success' : 'toast error';
-                ta.innerHTML = '<div class="' + cls + '">' + d.message + '</div>';
-                setTimeout(function(){{ ta.innerHTML = ''; }}, 3000);
-            }})
+            .then(function(d) {{ showToast(d.message, d.ok); }})
             .catch(function() {{ alert('Errore di rete'); }});
             return false;
         }}
@@ -1729,33 +1989,77 @@ def _get_stats():
         return {"users": {"total": 0, "active_24h": 0}, "messages": {"public": {"total": 0, "today": 0}, "private": {"total": 0, "today": 0, "unread": 0}}}
 
 
-def _get_mesh_nodes():
-    """Get mesh network nodes from companion radio."""
+# Mesh node list cache: avoids hitting the radio on every page render / refresh
+NODES_CACHE_TTL = max(5, _env_int("WEB_NODES_CACHE_TTL", 60))      # seconds
+CONTACTS_REFRESH_INTERVAL = max(10, _env_int("WEB_CONTACTS_REFRESH", 60))
+_nodes_cache = {"time": 0.0, "nodes": []}
+_nodes_cache_lock = threading.Lock()
+_contacts_refresh_lock = threading.Lock()
+_last_contacts_refresh = [0.0]
+
+
+def _refresh_contacts_from_radio(mc):
+    """Ask the radio for its contact list, at most once per CONTACTS_REFRESH_INTERVAL."""
+    now = time.time()
+    if now - _last_contacts_refresh[0] < CONTACTS_REFRESH_INTERVAL:
+        return
+    # Only one thread talks to the radio; others use the in-memory contacts
+    if not _contacts_refresh_lock.acquire(blocking=False):
+        return
+    try:
+        _last_contacts_refresh[0] = now
+        from bbs.runtime import get_event_loop
+        import asyncio
+        loop = get_event_loop()
+        if loop is None:
+            return
+        future = asyncio.run_coroutine_threadsafe(mc.commands.get_contacts(), loop)
+        future.result(timeout=10)
+    except Exception as e:
+        logger.warning(f"Contact refresh from radio failed, using cached contacts: {e}")
+    finally:
+        _contacts_refresh_lock.release()
+
+
+def _get_mesh_nodes(refresh=False):
+    """
+    Get mesh network nodes (cached for NODES_CACHE_TTL seconds).
+
+    refresh=True allows a (rate limited) get_contacts round-trip to the radio;
+    the live partial refresh paths always pass refresh=False.
+    """
+    now = time.time()
+    with _nodes_cache_lock:
+        if now - _nodes_cache["time"] < NODES_CACHE_TTL:
+            return list(_nodes_cache["nodes"])
+    nodes = _build_mesh_nodes(refresh)
+    if nodes is not None:
+        with _nodes_cache_lock:
+            _nodes_cache["time"] = time.time()
+            _nodes_cache["nodes"] = nodes
+        return list(nodes)
+    return []
+
+
+def _build_mesh_nodes(refresh=False):
+    """Build the node list from the companion contacts. Returns None if unavailable."""
     NODE_TYPES = {0: "---", 1: "CLI", 2: "RPT", 3: "ROOM", 4: "SENS"}
     try:
-        from bbs.runtime import get_bbs_instance, get_event_loop
-        import asyncio
+        from bbs.runtime import get_bbs_instance
 
         bbs = get_bbs_instance()
         if bbs is None or not bbs._running:
-            return []
+            return None
 
         mc = bbs.connection._meshcore
         if mc is None:
-            return []
+            return None
 
-        # Refresh contacts from the radio (must run in the async loop)
-        loop = get_event_loop()
-        if loop is not None:
-            try:
-                future = asyncio.run_coroutine_threadsafe(
-                    mc.commands.get_contacts(), loop
-                )
-                future.result(timeout=10)
-            except Exception:
-                pass  # Use cached contacts
+        if refresh:
+            _refresh_contacts_from_radio(mc)
 
-        contacts = mc.contacts or {}
+        # Shallow copy: the dict is mutated by the asyncio thread
+        contacts = dict(mc.contacts or {})
 
         # First pass: build repeater lookup by path hash prefix
         repeaters = {}
@@ -1829,9 +2133,9 @@ def _get_mesh_nodes():
         nodes.sort(key=lambda n: (type_order.get(n["type"], 9), n["name"]))
         return nodes
 
-    except Exception as e:
-        logger.error(f"Error fetching mesh nodes: {e}")
-        return []
+    except Exception:
+        logger.exception("Error fetching mesh nodes")
+        return None
 
 
 def _get_radio_status():
@@ -1896,19 +2200,39 @@ def _get_messages_paginated(page_num=1, per_page=25):
         return [], 0
 
 
-def _get_users():
-    """Get users from database."""
+def _get_users(limit=50):
+    """Get the most recently seen users (first page)."""
+    users, _ = _get_users_paginated(1, limit)
+    return users
+
+
+def _get_users_paginated(page_num=1, per_page=50):
+    """Get users with message counts (single aggregated query). Returns (list, total)."""
     try:
         from bbs.models.base import get_session
         from bbs.models.user import User
         from bbs.models.message import Message
         from sqlalchemy import func
 
+        page_num = max(1, int(page_num))
         with get_session() as session:
-            users = session.query(User).order_by(User.last_seen.desc()).limit(50).all()
+            total = session.query(func.count(User.public_key)).scalar() or 0
+            counts = (
+                session.query(Message.sender_key.label("sender_key"),
+                              func.count(Message.id).label("cnt"))
+                .group_by(Message.sender_key)
+                .subquery()
+            )
+            rows = (
+                session.query(User, func.coalesce(counts.c.cnt, 0))
+                .outerjoin(counts, counts.c.sender_key == User.public_key)
+                .order_by(User.last_seen.desc(), User.public_key)
+                .offset((page_num - 1) * per_page)
+                .limit(per_page)
+                .all()
+            )
             result = []
-            for u in users:
-                msg_count = session.query(Message).filter_by(sender_key=u.public_key).count()
+            for u, msg_count in rows:
                 result.append({
                     "name": u.display_name,
                     "key": u.public_key,
@@ -1919,10 +2243,10 @@ def _get_users():
                     "messages": msg_count,
                     "last_seen": u.last_seen.strftime("%d/%m %H:%M") if u.last_seen else "mai",
                 })
-            return result
-    except Exception as e:
-        logger.error(f"Error fetching users: {e}")
-        return []
+            return result, total
+    except Exception:
+        logger.exception("Error fetching users")
+        return [], 0
 
 
 def _get_recent_activity(limit=10):
@@ -1944,6 +2268,7 @@ def _get_recent_activity(limit=10):
                 "details": l.details or "",
             } for l in logs]
     except Exception:
+        logger.exception("Error fetching recent activity")
         return []
 
 
@@ -1979,6 +2304,7 @@ def _get_logs(limit=50, filter_mode="events"):
                 "details": l.details or "",
             } for l in logs]
     except Exception:
+        logger.exception("Error fetching activity logs")
         return []
 
 
@@ -2014,26 +2340,38 @@ def _render_activity_chart():
         from bbs.models.message import Message
         from bbs.models.activity_log import ActivityLog
 
+        from sqlalchemy import func
+
         with get_session() as session:
             now = datetime.utcnow()
+            first_hour = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=23)
+            end = first_hour + timedelta(hours=24)
+            bucket_fmt = "%Y-%m-%d %H"
+
+            # One GROUP BY per table instead of 48 COUNT queries (SQLite strftime)
+            msg_bucket = func.strftime(bucket_fmt, Message.timestamp)
+            msg_counts = dict(
+                session.query(msg_bucket, func.count(Message.id))
+                .filter(Message.timestamp >= first_hour, Message.timestamp < end)
+                .group_by(msg_bucket)
+                .all()
+            )
+            adv_bucket = func.strftime(bucket_fmt, ActivityLog.timestamp)
+            adv_counts = dict(
+                session.query(adv_bucket, func.count(ActivityLog.id))
+                .filter(ActivityLog.timestamp >= first_hour, ActivityLog.timestamp < end,
+                        ActivityLog.event_type == "advert_sent")
+                .group_by(adv_bucket)
+                .all()
+            )
+
             hours_data = []
-
-            for i in range(23, -1, -1):
-                hour_start = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=i)
-                hour_end = hour_start + timedelta(hours=1)
-
-                msg_count = session.query(Message).filter(
-                    Message.timestamp >= hour_start,
-                    Message.timestamp < hour_end,
-                ).count()
-
-                adv_count = session.query(ActivityLog).filter(
-                    ActivityLog.timestamp >= hour_start,
-                    ActivityLog.timestamp < hour_end,
-                    ActivityLog.event_type == "advert_sent",
-                ).count()
-
-                hours_data.append((hour_start.strftime("%H"), msg_count, adv_count))
+            for i in range(24):
+                hour_start = first_hour + timedelta(hours=i)
+                key = hour_start.strftime(bucket_fmt)
+                hours_data.append((hour_start.strftime("%H"),
+                                   int(msg_counts.get(key, 0) or 0),
+                                   int(adv_counts.get(key, 0) or 0)))
 
             max_val = max((m + a for _, m, a in hours_data), default=1) or 1
 
@@ -2071,25 +2409,30 @@ def _render_activity_chart():
             </div>
             """
     except Exception:
+        logger.exception("Error rendering activity chart")
         return ""
 
 
 # Track last seen repeaters for alerts
 _last_seen_repeaters = {}  # name -> timestamp
+REPEATER_FORGET_AFTER = 7 * 86400  # prune entries not seen for 7 days
 
 
-def _render_repeater_alerts():
+def _render_repeater_alerts(refresh_contacts=False):
     """Check for missing repeaters and render alert if any disappeared."""
-    global _last_seen_repeaters
-
     try:
-        nodes = _get_mesh_nodes()
+        nodes = _get_mesh_nodes(refresh=refresh_contacts)
         current_rpts = {n["name"]: n for n in nodes if n["type"] == "RPT"}
         now = time.time()
 
         # Update last seen
         for name in current_rpts:
             _last_seen_repeaters[name] = now
+
+        # Prune repeaters gone for too long
+        for name, last_seen in list(_last_seen_repeaters.items()):
+            if now - last_seen > REPEATER_FORGET_AFTER:
+                _last_seen_repeaters.pop(name, None)
 
         # Check for missing repeaters (seen before but not now)
         alerts = []
@@ -2102,7 +2445,7 @@ def _render_repeater_alerts():
         if not alerts:
             return ""
 
-        alert_items = "".join(f"<li>{a}</li>" for a in alerts)
+        alert_items = "".join(f"<li>{esc(a)}</li>" for a in alerts)
         return f"""
         <div class="card" style="border-color:#7f1d1d;margin-bottom:1rem">
             <h3 style="color:#f87171">Repeater non raggiungibili</h3>
@@ -2110,6 +2453,7 @@ def _render_repeater_alerts():
         </div>
         """
     except Exception:
+        logger.exception("Error rendering repeater alerts")
         return ""
 
 
@@ -2117,13 +2461,53 @@ def _render_repeater_alerts():
 # Server startup
 # ---------------------------------------------------------------
 
+from socketserver import ThreadingMixIn
+from wsgiref.simple_server import WSGIServer, WSGIRequestHandler, make_server
+
+
+class _ThreadingWSGIServer(ThreadingMixIn, WSGIServer):
+    """wsgiref server handling each request in its own daemon thread (stdlib only)."""
+    daemon_threads = True
+    allow_reuse_address = True
+
+
+class _QuietHandler(WSGIRequestHandler):
+    def address_string(self):  # no reverse DNS lookups
+        return self.client_address[0]
+
+    def log_message(self, format, *args):
+        pass
+
+
+class _DebugHandler(WSGIRequestHandler):
+    def address_string(self):
+        return self.client_address[0]
+
+
+def _make_server(host, port, debug=False):
+    handler = _DebugHandler if debug else _QuietHandler
+    return make_server(host, port, app, server_class=_ThreadingWSGIServer,
+                       handler_class=handler)
+
+
+def _serve(host, port, debug=False):
+    if debug:
+        import bottle
+        bottle.debug(True)
+    httpd = _make_server(host, port, debug)
+    try:
+        httpd.serve_forever()
+    finally:
+        httpd.server_close()
+
+
 def start_server(host="0.0.0.0", port=8080, debug=False):
     """Start the lightweight web server in a background thread."""
     logger.info(f"Starting lightweight web server on {host}:{port}")
     thread = threading.Thread(
-        target=run,
-        args=(app,),
-        kwargs={"host": host, "port": port, "quiet": not debug, "debug": debug},
+        target=_serve,
+        args=(host, port, debug),
+        name="web_light",
         daemon=True,
     )
     thread.start()
@@ -2133,4 +2517,4 @@ def start_server(host="0.0.0.0", port=8080, debug=False):
 def run_server(host="0.0.0.0", port=8080, debug=False):
     """Run the web server (blocking, for standalone use)."""
     logger.info(f"Starting lightweight web server on {host}:{port}")
-    run(app, host=host, port=port, quiet=not debug, debug=debug)
+    _serve(host, port, debug)
