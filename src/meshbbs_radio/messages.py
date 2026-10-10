@@ -30,6 +30,10 @@ class Message:
     rssi: Optional[int] = None
     snr: Optional[float] = None
 
+    # Sender display name. Channel messages (GRP_TXT) carry no sender key,
+    # only a "Name: text" prefix: the name is parsed out and kept here.
+    sender_name: Optional[str] = None
+
     # Routing info
     path: List[str] = field(default_factory=list)
     is_flood: bool = True
@@ -50,8 +54,10 @@ class Message:
 
     @property
     def sender_short(self) -> str:
-        """Get shortened sender key for display."""
-        return self.sender_key[:8] if self.sender_key else "unknown"
+        """Get shortened sender key (or name, if no key) for display."""
+        if self.sender_key:
+            return self.sender_key[:8]
+        return self.sender_name or "unknown"
 
     def __str__(self) -> str:
         if self.is_channel:

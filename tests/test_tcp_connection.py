@@ -27,7 +27,7 @@ class TestTCPMeshCoreConnectionInit:
         conn = TCPMeshCoreConnection()
 
         assert conn.host == "192.168.1.100"
-        assert conn.port == 4403
+        assert conn.port == 5000
         assert conn.timeout == 30.0
         assert conn.debug is False
         assert conn.connected is False

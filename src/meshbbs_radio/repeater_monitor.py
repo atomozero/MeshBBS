@@ -106,6 +106,10 @@ class RepeaterMonitor:
             pass
 
         while not self._stop.is_set():
+            # Refresh the companion contact list first: targets missing
+            # from a stale list would otherwise be skipped
+            await self._refresh_contacts()
+
             for target in self.targets:
                 if self._stop.is_set():
                     break
@@ -121,9 +125,26 @@ class RepeaterMonitor:
             except asyncio.TimeoutError:
                 continue
 
+    async def _refresh_contacts(self) -> None:
+        connection = self.bbs.connection
+        if not getattr(connection, "connected", False):
+            return
+        try:
+            refresh = getattr(connection, "refresh_contacts", None)
+            if refresh is not None:
+                ok = await refresh(force=True)
+            else:
+                mc = getattr(connection, "_meshcore", None)
+                ok = mc is not None and await mc.commands.get_contacts() is not None
+            if not ok:
+                logger.warning("Repeater monitor: contact refresh failed")
+        except Exception as e:
+            logger.warning(f"Repeater monitor: contact refresh failed: {e}")
+
     async def _poll_target(self, target: RepeaterTarget) -> None:
-        mc = getattr(self.bbs.connection, "_meshcore", None)
-        if mc is None:
+        connection = self.bbs.connection
+        mc = getattr(connection, "_meshcore", None)
+        if mc is None or not getattr(connection, "connected", True):
             target.last_error = "radio not connected"
             return
 
@@ -143,51 +164,54 @@ class RepeaterMonitor:
             target.last_error = "contact not in companion contact list"
             return
 
+        # Hard upper bound per request: *_sync helpers compute their own
+        # timeout from the path length, this only guards against hangs.
+        guard = self.request_timeout + 10
+
+        logged_in = False
         try:
-            login_result = await mc.commands.send_login(contact, password)
-            if getattr(login_result, "type", None) == EventType.ERROR:
-                target.last_error = "login send failed"
-                return
-
-            login_evt = await mc.wait_for_event(
-                EventType.LOGIN_SUCCESS, timeout=self.request_timeout
+            # send_login_sync / req_status_sync subscribe before sending and
+            # match the response by tag: no subscribe-after-send race.
+            login_evt = await asyncio.wait_for(
+                mc.commands.send_login_sync(
+                    contact, password, min_timeout=self.request_timeout
+                ),
+                timeout=guard,
             )
-            if login_evt is None:
-                failed = await mc.wait_for_event(EventType.LOGIN_FAILED, timeout=0.1)
-                target.last_error = (
-                    "login rejected (bad password?)" if failed else "login timeout"
-                )
+            if login_evt is None or getattr(login_evt, "type", None) != EventType.LOGIN_SUCCESS:
+                target.last_error = "login failed (bad password or timeout)"
                 return
+            logged_in = True
 
-            status_result = await mc.commands.send_statusreq(contact)
-            if getattr(status_result, "type", None) == EventType.ERROR:
-                target.last_error = "status request send failed"
-                return
-
-            status_evt = await mc.wait_for_event(
-                EventType.STATUS_RESPONSE, timeout=self.request_timeout
+            status = await asyncio.wait_for(
+                mc.commands.req_status_sync(contact, min_timeout=self.request_timeout),
+                timeout=guard,
             )
-            if status_evt is None:
+            if not status:
                 target.last_error = "status response timeout"
                 return
 
-            sample = self._build_sample(target, status_evt.payload)
+            sample = self._build_sample(target, status)
             target.last_sample = sample
             target.last_error = None
             self._append_jsonl(sample)
             logger.info(
                 f"Repeater monitor: {target.name} sample ok "
-                f"(batt={sample.get('battery_mv')}mV uptime={sample.get('uptime_s')}s)"
+                f"(batt={sample.get('bat')}mV uptime={sample.get('uptime')}s)"
             )
 
+        except asyncio.TimeoutError:
+            target.last_error = "request timeout"
+            logger.warning(f"Repeater monitor: {target.name} poll timed out")
         except Exception as e:
             target.last_error = str(e)
             logger.warning(f"Repeater monitor: {target.name} poll failed: {e}")
         finally:
-            try:
-                await mc.commands.send_logout(contact)
-            except Exception:
-                pass
+            if logged_in:
+                try:
+                    await asyncio.wait_for(mc.commands.send_logout(contact), timeout=10)
+                except Exception:
+                    pass
 
     def _build_sample(self, target: RepeaterTarget, payload: Any) -> Dict[str, Any]:
         data: Dict[str, Any] = {}
