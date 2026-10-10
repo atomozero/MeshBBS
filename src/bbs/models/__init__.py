@@ -1,6 +1,7 @@
 """Database models for MeshCore BBS."""
 
 from .base import Base, get_engine, get_session, init_database
+from . import sqlite_tuning  # noqa: F401  (SQLite pragmas for SD cards)
 from .user import User
 from .area import Area
 from .message import Message

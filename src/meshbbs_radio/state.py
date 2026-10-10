@@ -18,6 +18,34 @@ from typing import Optional, Callable, List, Any
 logger = logging.getLogger(__name__)
 
 
+# Single-cell LiPo resting voltage (mV) -> charge (%), linear in between.
+# Approximate: good enough for a dashboard gauge, not for a fuel gauge.
+LIPO_CURVE = (
+    (4200, 100), (4100, 90), (4000, 80), (3900, 70), (3850, 60),
+    (3800, 50), (3750, 40), (3700, 30), (3650, 20), (3500, 10), (3300, 0),
+)
+
+
+def lipo_percent(millivolts: Optional[int]) -> Optional[int]:
+    """Estimate the charge of a 1S LiPo from its voltage (3.3-4.2 V)."""
+    if millivolts is None:
+        return None
+    try:
+        mv = int(millivolts)
+    except (TypeError, ValueError):
+        return None
+    if mv <= 0:
+        return None  # no battery / not reported
+    if mv >= LIPO_CURVE[0][0]:
+        return 100
+    if mv <= LIPO_CURVE[-1][0]:
+        return 0
+    for (hi_mv, hi_pct), (lo_mv, lo_pct) in zip(LIPO_CURVE, LIPO_CURVE[1:]):
+        if lo_mv <= mv <= hi_mv:
+            return int(round(lo_pct + (mv - lo_mv) * (hi_pct - lo_pct) / (hi_mv - lo_mv)))
+    return None  # pragma: no cover
+
+
 class ConnectionStatus(str, Enum):
     """Connection status states."""
 
@@ -37,9 +65,14 @@ class RadioInfo:
     port: str = ""
     baud_rate: int = 115200
     is_mock: bool = False
-    battery_level: Optional[int] = None
+    battery_level: Optional[int] = None  # estimated %
     battery_charging: bool = False
     firmware_version: Optional[str] = None
+    battery_mv: Optional[int] = None
+    battery_updated_at: Optional[datetime] = None
+    storage_used_kb: Optional[int] = None
+    storage_total_kb: Optional[int] = None
+    model: Optional[str] = None
 
 
 @dataclass
@@ -208,17 +241,41 @@ class MeshCoreStateManager:
             self._state.last_activity = datetime.utcnow()
             self._state.message_count += 1
 
-    async def update_battery(self, level: int, charging: bool) -> None:
+    async def update_battery(
+        self,
+        millivolts: Optional[int],
+        used_kb: Optional[int] = None,
+        total_kb: Optional[int] = None,
+    ) -> None:
         """
-        Update battery information.
+        Update battery information from the companion BATTERY reply.
 
         Args:
-            level: Battery level percentage
-            charging: Whether battery is charging
+            millivolts: Battery voltage in mV (meshcore payload 'level')
+            used_kb: Storage used (KB), if reported
+            total_kb: Storage total (KB), if reported
         """
         async with self._lock:
-            self._state.radio_info.battery_level = level
-            self._state.radio_info.battery_charging = charging
+            info = self._state.radio_info
+            try:
+                mv = int(millivolts) if millivolts is not None else None
+            except (TypeError, ValueError):
+                mv = None
+            info.battery_mv = mv if mv and mv > 0 else None
+            info.battery_level = lipo_percent(info.battery_mv)
+            info.battery_updated_at = datetime.utcnow()
+            if used_kb is not None:
+                info.storage_used_kb = used_kb
+            if total_kb is not None:
+                info.storage_total_kb = total_kb
+
+    async def update_device_info(self, model: Optional[str], firmware: Optional[str]) -> None:
+        """Store companion model / firmware version (from the device query)."""
+        async with self._lock:
+            if model:
+                self._state.radio_info.model = model
+            if firmware:
+                self._state.radio_info.firmware_version = firmware
 
     def to_dict(self) -> dict:
         """
@@ -239,6 +296,9 @@ class MeshCoreStateManager:
                 "is_mock": state.radio_info.is_mock,
                 "battery_level": state.radio_info.battery_level,
                 "battery_charging": state.radio_info.battery_charging,
+                "battery_mv": state.radio_info.battery_mv,
+                "model": state.radio_info.model,
+                "firmware_version": state.radio_info.firmware_version,
             } if self.is_connected else None,
             "connected_at": state.connected_at.isoformat() if state.connected_at else None,
             "last_activity": state.last_activity.isoformat() if state.last_activity else None,

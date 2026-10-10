@@ -1,39 +1,56 @@
 """
-MQTT integration for MeshBBS.
+Thin MQTT client wrapper for MeshBBS (paho-mqtt, callback API v2).
 
 MIT License - Copyright (c) 2026 MeshBBS Contributors
 
-This module provides MQTT client integration for publishing BBS events
-to an MQTT broker, enabling integration with home automation systems,
-monitoring dashboards, and other IoT applications.
+The network loop runs in paho's own thread (loop_start), so nothing here
+ever blocks the asyncio loop. paho reconnects automatically (with
+backoff) after a lost connection and keeps retrying the first connection
+too, so a broker that is down at boot is never fatal.
+
+BBS specific logic (status, events, Home Assistant discovery, inbound
+commands) lives in bbs.services.mqtt_bridge.
 """
 
-import asyncio
 import json
 import os
-from dataclasses import dataclass, asdict
-from datetime import datetime
-from typing import Optional, Callable, Awaitable, Any, Dict, List
+from dataclasses import dataclass
+from typing import Any, Callable, List, Optional
 
 try:
     from utils.logger import get_logger
     logger = get_logger("meshbbs.mqtt")
-except ImportError:
+except ImportError:  # pragma: no cover
     import logging
     logger = logging.getLogger("meshbbs.mqtt")
 
-# Try to import paho-mqtt (optional dependency)
+# paho-mqtt is optional
 try:
     import paho.mqtt.client as mqtt
     MQTT_AVAILABLE = True
-except ImportError:
-    MQTT_AVAILABLE = False
+except ImportError:  # pragma: no cover - depends on the install
     mqtt = None
+    MQTT_AVAILABLE = False
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.getenv(name, "") or default)
+    except ValueError:
+        logger.warning(f"Invalid {name}, using {default}")
+        return default
 
 
 @dataclass
 class MQTTConfig:
-    """MQTT client configuration."""
+    """MQTT settings (from the environment / config.env)."""
 
     enabled: bool = False
     host: str = "localhost"
@@ -42,397 +59,198 @@ class MQTTConfig:
     password: Optional[str] = None
     client_id: str = "meshbbs"
     topic_prefix: str = "meshbbs"
-    tls_enabled: bool = False
-    tls_ca_certs: Optional[str] = None
-    tls_certfile: Optional[str] = None
-    tls_keyfile: Optional[str] = None
+    discovery: bool = True
+    discovery_prefix: str = "homeassistant"
+    publish_channel_text: bool = False
+    commands_enabled: bool = True
     keepalive: int = 60
-    qos: int = 1
-    retain: bool = False
 
     @classmethod
-    def from_env(cls) -> 'MQTTConfig':
-        """Create config from environment variables."""
+    def from_env(cls) -> "MQTTConfig":
+        prefix = (os.getenv("MQTT_TOPIC_PREFIX") or "meshbbs").strip().strip("/") or "meshbbs"
         return cls(
-            enabled=os.getenv('MQTT_ENABLED', 'false').lower() == 'true',
-            host=os.getenv('MQTT_HOST', 'localhost'),
-            port=int(os.getenv('MQTT_PORT', '1883')),
-            username=os.getenv('MQTT_USERNAME'),
-            password=os.getenv('MQTT_PASSWORD'),
-            client_id=os.getenv('MQTT_CLIENT_ID', 'meshbbs'),
-            topic_prefix=os.getenv('MQTT_TOPIC_PREFIX', 'meshbbs'),
-            tls_enabled=os.getenv('MQTT_TLS_ENABLED', 'false').lower() == 'true',
-            tls_ca_certs=os.getenv('MQTT_TLS_CA_CERTS'),
-            tls_certfile=os.getenv('MQTT_TLS_CERTFILE'),
-            tls_keyfile=os.getenv('MQTT_TLS_KEYFILE'),
-            keepalive=int(os.getenv('MQTT_KEEPALIVE', '60')),
-            qos=int(os.getenv('MQTT_QOS', '1')),
-            retain=os.getenv('MQTT_RETAIN', 'false').lower() == 'true',
+            enabled=_env_bool("MQTT_ENABLED", False),
+            host=(os.getenv("MQTT_HOST") or "localhost").strip(),
+            port=_env_int("MQTT_PORT", 1883),
+            username=os.getenv("MQTT_USERNAME") or None,
+            password=os.getenv("MQTT_PASSWORD") or None,
+            client_id=(os.getenv("MQTT_CLIENT_ID") or f"meshbbs-{prefix}").strip(),
+            topic_prefix=prefix,
+            discovery=_env_bool("MQTT_DISCOVERY", True),
+            discovery_prefix=(os.getenv("MQTT_DISCOVERY_PREFIX") or "homeassistant").strip().strip("/"),
+            publish_channel_text=_env_bool("MQTT_PUBLISH_CHANNEL_TEXT", False),
+            commands_enabled=_env_bool("MQTT_COMMANDS_ENABLED", True),
         )
+
+    def topic(self, suffix: str) -> str:
+        return f"{self.topic_prefix}/{suffix}"
+
+    @property
+    def availability_topic(self) -> str:
+        return self.topic("availability")
+
+
+def _reason_failed(reason_code: Any) -> bool:
+    """True if a connect reason code (v2 ReasonCode or v1 int) is a failure."""
+    is_failure = getattr(reason_code, "is_failure", None)
+    if is_failure is not None:
+        return bool(is_failure)
+    try:
+        return int(reason_code) != 0
+    except (TypeError, ValueError):
+        return True
 
 
 class MQTTClient:
     """
-    MQTT client for publishing BBS events.
+    paho wrapper: LWT on the availability topic, auto-reconnect,
+    thread-safe publish, subscriptions restored on every (re)connect.
 
-    Publishes events like:
-    - meshbbs/status - BBS online/offline status
-    - meshbbs/message - New messages
-    - meshbbs/user - User events (login, logout, registration)
-    - meshbbs/system - System events (backup, errors)
+    Callbacks registered with set_on_connect / set_on_message run in the
+    paho network thread: they must not touch asyncio objects directly.
     """
 
-    def __init__(self, config: Optional[MQTTConfig] = None):
-        """
-        Initialize MQTT client.
-
-        Args:
-            config: MQTT configuration. If None, loads from environment.
-        """
-        self.config = config or MQTTConfig.from_env()
-        self._client: Optional[Any] = None
+    def __init__(self, config: MQTTConfig, client_factory: Optional[Callable[..., Any]] = None):
+        self.config = config
+        self._client_factory = client_factory
+        self._client: Any = None
         self._connected = False
-        self._reconnect_task: Optional[asyncio.Task] = None
-        self._message_callbacks: List[Callable] = []
-
-        if not MQTT_AVAILABLE:
-            if self.config.enabled:
-                logger.warning(
-                    "MQTT is enabled but paho-mqtt is not installed. "
-                    "Install with: pip install paho-mqtt"
-                )
-            self.config.enabled = False
-
-    async def connect(self) -> bool:
-        """
-        Connect to the MQTT broker.
-
-        Returns:
-            True if connection successful
-        """
-        if not self.config.enabled:
-            logger.debug("MQTT is disabled, skipping connection")
-            return False
-
-        if not MQTT_AVAILABLE:
-            return False
-
-        try:
-            # Create client
-            self._client = mqtt.Client(
-                client_id=self.config.client_id,
-                protocol=mqtt.MQTTv311,
-            )
-
-            # Set callbacks
-            self._client.on_connect = self._on_connect
-            self._client.on_disconnect = self._on_disconnect
-            self._client.on_message = self._on_message
-
-            # Set authentication if provided
-            if self.config.username:
-                self._client.username_pw_set(
-                    self.config.username,
-                    self.config.password
-                )
-
-            # Set TLS if enabled
-            if self.config.tls_enabled:
-                self._client.tls_set(
-                    ca_certs=self.config.tls_ca_certs,
-                    certfile=self.config.tls_certfile,
-                    keyfile=self.config.tls_keyfile,
-                )
-
-            # Set last will (offline status)
-            self._client.will_set(
-                f"{self.config.topic_prefix}/status",
-                payload=json.dumps({
-                    "status": "offline",
-                    "timestamp": datetime.utcnow().isoformat(),
-                }),
-                qos=self.config.qos,
-                retain=True,
-            )
-
-            # Connect
-            logger.info(f"Connecting to MQTT broker at {self.config.host}:{self.config.port}")
-            self._client.connect_async(
-                self.config.host,
-                self.config.port,
-                keepalive=self.config.keepalive,
-            )
-
-            # Start network loop
-            self._client.loop_start()
-
-            # Wait for connection
-            for _ in range(50):  # 5 seconds timeout
-                if self._connected:
-                    return True
-                await asyncio.sleep(0.1)
-
-            logger.warning("MQTT connection timeout")
-            return False
-
-        except Exception as e:
-            logger.error(f"MQTT connection failed: {e}")
-            return False
-
-    async def disconnect(self) -> None:
-        """Disconnect from the MQTT broker."""
-        if self._client:
-            try:
-                # Publish offline status
-                await self.publish_status("offline")
-
-                # Stop reconnect task
-                if self._reconnect_task:
-                    self._reconnect_task.cancel()
-                    try:
-                        await self._reconnect_task
-                    except asyncio.CancelledError:
-                        pass
-
-                # Disconnect
-                self._client.loop_stop()
-                self._client.disconnect()
-                logger.info("MQTT disconnected")
-
-            except Exception as e:
-                logger.error(f"MQTT disconnect error: {e}")
-
-            finally:
-                self._client = None
-                self._connected = False
-
-    def _on_connect(self, client, userdata, flags, rc):
-        """Callback when connected to broker."""
-        if rc == 0:
-            logger.info("MQTT connected successfully")
-            self._connected = True
-
-            # Publish online status
-            self._publish_sync(
-                f"{self.config.topic_prefix}/status",
-                {
-                    "status": "online",
-                    "timestamp": datetime.utcnow().isoformat(),
-                },
-                retain=True,
-            )
-
-            # Subscribe to command topics
-            self._client.subscribe(f"{self.config.topic_prefix}/command/#")
-
-        else:
-            logger.error(f"MQTT connection failed with code: {rc}")
-            self._connected = False
-
-    def _on_disconnect(self, client, userdata, rc):
-        """Callback when disconnected from broker."""
-        logger.warning(f"MQTT disconnected (rc={rc})")
-        self._connected = False
-
-    def _on_message(self, client, userdata, msg):
-        """Callback when message received."""
-        try:
-            topic = msg.topic
-            payload = json.loads(msg.payload.decode())
-            logger.debug(f"MQTT message received: {topic}")
-
-            # Notify callbacks
-            for callback in self._message_callbacks:
-                try:
-                    callback(topic, payload)
-                except Exception as e:
-                    logger.error(f"MQTT callback error: {e}")
-
-        except Exception as e:
-            logger.error(f"MQTT message processing error: {e}")
-
-    def on_message(self, callback: Callable[[str, dict], None]) -> None:
-        """Register a callback for incoming MQTT messages."""
-        self._message_callbacks.append(callback)
-
-    async def publish(
-        self,
-        topic: str,
-        payload: dict,
-        retain: Optional[bool] = None,
-    ) -> bool:
-        """
-        Publish a message to an MQTT topic.
-
-        Args:
-            topic: Topic name (will be prefixed automatically)
-            payload: Message payload (will be JSON encoded)
-            retain: Whether to retain the message
-
-        Returns:
-            True if publish successful
-        """
-        if not self._connected or not self._client:
-            return False
-
-        full_topic = f"{self.config.topic_prefix}/{topic}"
-        return self._publish_sync(full_topic, payload, retain)
-
-    def _publish_sync(
-        self,
-        topic: str,
-        payload: dict,
-        retain: Optional[bool] = None,
-    ) -> bool:
-        """Synchronous publish helper."""
-        try:
-            message = json.dumps(payload)
-            result = self._client.publish(
-                topic,
-                message,
-                qos=self.config.qos,
-                retain=retain if retain is not None else self.config.retain,
-            )
-            return result.rc == mqtt.MQTT_ERR_SUCCESS
-        except Exception as e:
-            logger.error(f"MQTT publish error: {e}")
-            return False
-
-    async def publish_status(self, status: str, details: Optional[dict] = None) -> bool:
-        """
-        Publish BBS status update.
-
-        Args:
-            status: Status string (online, offline, maintenance, etc.)
-            details: Optional additional details
-        """
-        payload = {
-            "status": status,
-            "timestamp": datetime.utcnow().isoformat(),
-        }
-        if details:
-            payload.update(details)
-
-        return await self.publish("status", payload, retain=True)
-
-    async def publish_message(
-        self,
-        sender_key: str,
-        sender_name: Optional[str],
-        text: str,
-        area: Optional[str] = None,
-        message_id: Optional[str] = None,
-    ) -> bool:
-        """
-        Publish a new message event.
-
-        Args:
-            sender_key: Sender's public key
-            sender_name: Sender's display name
-            text: Message text
-            area: Message area (None for private messages)
-            message_id: Optional message ID
-        """
-        return await self.publish("message", {
-            "sender_key": sender_key,
-            "sender_name": sender_name,
-            "text": text,
-            "area": area,
-            "message_id": message_id,
-            "timestamp": datetime.utcnow().isoformat(),
-        })
-
-    async def publish_user_event(
-        self,
-        event_type: str,
-        user_key: str,
-        user_name: Optional[str] = None,
-        details: Optional[dict] = None,
-    ) -> bool:
-        """
-        Publish a user event.
-
-        Args:
-            event_type: Event type (login, logout, registered, banned, etc.)
-            user_key: User's public key
-            user_name: User's display name
-            details: Optional additional details
-        """
-        payload = {
-            "event": event_type,
-            "user_key": user_key,
-            "user_name": user_name,
-            "timestamp": datetime.utcnow().isoformat(),
-        }
-        if details:
-            payload.update(details)
-
-        return await self.publish("user", payload)
-
-    async def publish_system_event(
-        self,
-        event_type: str,
-        details: Optional[dict] = None,
-    ) -> bool:
-        """
-        Publish a system event.
-
-        Args:
-            event_type: Event type (backup, error, warning, etc.)
-            details: Optional additional details
-        """
-        payload = {
-            "event": event_type,
-            "timestamp": datetime.utcnow().isoformat(),
-        }
-        if details:
-            payload.update(details)
-
-        return await self.publish("system", payload)
-
-    async def publish_stats(self, stats: dict) -> bool:
-        """
-        Publish BBS statistics.
-
-        Args:
-            stats: Statistics dictionary
-        """
-        payload = {
-            **stats,
-            "timestamp": datetime.utcnow().isoformat(),
-        }
-        return await self.publish("stats", payload, retain=True)
+        self._subscriptions: List[str] = []
+        self._on_connect_cb: Optional[Callable[[], None]] = None
+        self._on_message_cb: Optional[Callable[[str, bytes], None]] = None
 
     @property
     def is_connected(self) -> bool:
-        """Check if connected to broker."""
         return self._connected
 
+    def set_on_connect(self, callback: Optional[Callable[[], None]]) -> None:
+        self._on_connect_cb = callback
 
-# Singleton instance
-_mqtt_client: Optional[MQTTClient] = None
+    def set_on_message(self, callback: Optional[Callable[[str, bytes], None]]) -> None:
+        self._on_message_cb = callback
 
+    def subscribe(self, topic: str) -> None:
+        """Subscribe now (if connected) and again after every reconnect."""
+        if topic not in self._subscriptions:
+            self._subscriptions.append(topic)
+        if self._connected and self._client is not None:
+            try:
+                self._client.subscribe(topic, qos=0)
+            except Exception as e:
+                logger.warning(f"MQTT subscribe {topic} failed: {e}")
 
-def get_mqtt_client() -> MQTTClient:
-    """Get the global MQTT client instance."""
-    global _mqtt_client
-    if _mqtt_client is None:
-        _mqtt_client = MQTTClient()
-    return _mqtt_client
+    def _build_client(self) -> Any:
+        if self._client_factory is not None:
+            return self._client_factory()
+        if hasattr(mqtt, "CallbackAPIVersion"):
+            return mqtt.Client(
+                callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
+                client_id=self.config.client_id,
+                protocol=mqtt.MQTTv311,
+            )
+        # paho-mqtt 1.x (the callbacks below accept both signatures)
+        return mqtt.Client(client_id=self.config.client_id, protocol=mqtt.MQTTv311)  # pragma: no cover
 
+    def start(self) -> bool:
+        """
+        Start the background network loop (never blocks, never raises).
 
-async def init_mqtt() -> Optional[MQTTClient]:
-    """Initialize and connect the MQTT client."""
-    client = get_mqtt_client()
-    if client.config.enabled:
-        await client.connect()
-        return client
-    return None
+        Returns:
+            False if MQTT cannot be used (paho missing or setup error)
+        """
+        if self._client_factory is None and not MQTT_AVAILABLE:
+            logger.warning("MQTT_ENABLED but paho-mqtt is not installed (pip install paho-mqtt)")
+            return False
+        try:
+            client = self._build_client()
+            client.on_connect = self._on_connect
+            client.on_disconnect = self._on_disconnect
+            client.on_message = self._on_message
+            if self.config.username:
+                client.username_pw_set(self.config.username, self.config.password)
+            client.will_set(self.config.availability_topic, payload="offline", qos=1, retain=True)
+            client.reconnect_delay_set(min_delay=2, max_delay=120)
+            client.connect_async(self.config.host, self.config.port, keepalive=self.config.keepalive)
+            client.loop_start()
+            self._client = client
+            logger.info(f"MQTT: connessione a {self.config.host}:{self.config.port} in background")
+            return True
+        except Exception as e:
+            logger.error(f"MQTT setup failed: {e}")
+            self._client = None
+            return False
 
+    def stop(self) -> None:
+        """Publish 'offline', disconnect and stop the loop (blocking, short)."""
+        client = self._client
+        if client is None:
+            return
+        self._client = None
+        try:
+            if self._connected:
+                info = client.publish(self.config.availability_topic, "offline", qos=1, retain=True)
+                try:
+                    info.wait_for_publish(timeout=2)
+                except Exception:
+                    pass
+            client.disconnect()
+        except Exception as e:
+            logger.debug(f"MQTT disconnect error: {e}")
+        try:
+            client.loop_stop()
+        except Exception:
+            pass
+        self._connected = False
+        logger.info("MQTT disconnesso")
 
-async def shutdown_mqtt() -> None:
-    """Shutdown the MQTT client."""
-    global _mqtt_client
-    if _mqtt_client:
-        await _mqtt_client.disconnect()
-        _mqtt_client = None
+    def publish(self, topic: str, payload: Any, retain: bool = False, qos: int = 0) -> bool:
+        """Publish (thread-safe, non-blocking). dict/list payloads become JSON."""
+        client = self._client
+        if client is None or not self._connected:
+            return False
+        if isinstance(payload, (dict, list)):
+            payload = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        try:
+            info = client.publish(topic, payload, qos=qos, retain=retain)
+            rc = getattr(info, "rc", 0)
+            return rc == 0
+        except Exception as e:
+            logger.debug(f"MQTT publish {topic} failed: {e}")
+            return False
+
+    # -- paho callbacks (network thread) -------------------------------
+
+    def _on_connect(self, client, userdata, flags, reason_code, properties=None):
+        if _reason_failed(reason_code):
+            self._connected = False
+            logger.warning(f"MQTT connessione rifiutata: {reason_code}")
+            return
+        self._connected = True
+        logger.info(f"MQTT connesso a {self.config.host}:{self.config.port}")
+        try:
+            client.publish(self.config.availability_topic, "online", qos=1, retain=True)
+            for topic in self._subscriptions:
+                client.subscribe(topic, qos=0)
+        except Exception as e:
+            logger.warning(f"MQTT post-connect error: {e}")
+        if self._on_connect_cb is not None:
+            try:
+                self._on_connect_cb()
+            except Exception as e:
+                logger.error(f"MQTT on_connect callback error: {e}")
+
+    def _on_disconnect(self, client, userdata, *args):
+        # v2: (flags, reason_code, properties) - v1: (rc,)
+        was_connected = self._connected
+        self._connected = False
+        if was_connected and self._client is not None:
+            reason = args[1] if len(args) >= 2 else (args[0] if args else "?")
+            logger.warning(f"MQTT disconnesso ({reason}), riconnessione automatica")
+
+    def _on_message(self, client, userdata, msg):
+        if self._on_message_cb is None:
+            return
+        try:
+            self._on_message_cb(msg.topic, msg.payload or b"")
+        except Exception as e:
+            logger.error(f"MQTT message handler error: {e}")

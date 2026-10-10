@@ -170,6 +170,11 @@ class BaseMeshCoreConnection(ABC):
         self._meshcore: Optional[Any] = None
         self._link_lost_callback: Optional[Callable[[str], Any]] = None
         self._dropped_messages: int = 0
+        # Last BATTERY payload ({'level': mV, 'used_kb', 'total_kb'}),
+        # refreshed for free by every successful probe()
+        self.last_battery: Optional[dict] = None
+        # Companion model/firmware from the device query (once per connect)
+        self.device_info: Optional[dict] = None
 
     async def _refresh_contacts_if_stale(self) -> bool:
         """
@@ -258,6 +263,10 @@ class BaseMeshCoreConnection(ABC):
             True if the link is alive
         """
         return self.connected
+
+    async def query_device_info(self) -> Optional[dict]:
+        """Read model/firmware (and battery) from the companion, if supported."""
+        return self.device_info
 
     async def send_channel_message(self, channel_idx: int, text: str) -> bool:
         """
@@ -706,7 +715,7 @@ class _LibraryMeshCoreConnection(BaseMeshCoreConnection):
                 self._invalidate_contacts_cache()
                 return False
 
-            logger.info(f"SENT to={destination[:12]} len={len(text)}")
+            logger.debug(f"SENT to={destination[:12]} len={len(text)}")
             return True
 
         except Exception as e:
@@ -829,7 +838,49 @@ class _LibraryMeshCoreConnection(BaseMeshCoreConnection):
                 f"{getattr(result, 'payload', None)}"
             )
             return False
+        payload = getattr(result, "payload", None)
+        if isinstance(payload, dict) and "level" in payload:
+            self.last_battery = dict(payload)
         return True
+
+    # Max time for the (optional) device query after connecting
+    DEVICE_QUERY_TIMEOUT = 10.0
+
+    async def query_device_info(self) -> Optional[dict]:
+        """
+        Ask the companion for model/firmware and battery (best effort).
+
+        Called once after each connection; failures are only logged at
+        DEBUG level since these details are purely informative.
+        """
+        if self._mock is not None:
+            return None
+        mc = self._meshcore
+        if not self.connected or mc is None:
+            return None
+        try:
+            result = await asyncio.wait_for(
+                mc.commands.send_device_query(), timeout=self.DEVICE_QUERY_TIMEOUT
+            )
+            payload = getattr(result, "payload", None)
+            if not is_error_event(result) and isinstance(payload, dict):
+                self.device_info = {
+                    "model": (payload.get("model") or "").strip() or None,
+                    "firmware": (payload.get("ver") or "").strip() or None,
+                    "fw_build": (payload.get("fw_build") or "").strip() or None,
+                }
+        except Exception as e:
+            logger.debug(f"Device query failed: {e}")
+        try:
+            result = await asyncio.wait_for(
+                mc.commands.get_bat(), timeout=self.DEVICE_QUERY_TIMEOUT
+            )
+            payload = getattr(result, "payload", None)
+            if not is_error_event(result) and isinstance(payload, dict) and "level" in payload:
+                self.last_battery = dict(payload)
+        except Exception as e:
+            logger.debug(f"Battery query failed: {e}")
+        return self.device_info
 
     def flush_pending_contacts(self) -> int:
         """Drop pending contacts accumulated by meshcore (memory bound)."""

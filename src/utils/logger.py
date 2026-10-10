@@ -22,7 +22,7 @@ def setup_logger(
     name: str = "meshbbs",
     log_file: Optional[str] = None,
     level: str = "INFO",
-    max_bytes: int = 5 * 1024 * 1024,  # 5MB
+    max_bytes: int = 1024 * 1024,  # 1MB (SD card friendly)
     backup_count: int = 3,
 ) -> logging.Logger:
     """

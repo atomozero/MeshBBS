@@ -685,8 +685,13 @@ def _render_dashboard_live(refresh_contacts=False):
     # Radio details
     radio_info = ""
     if radio["connected"]:
-        battery = radio.get("battery_level")
-        bat_str = f"{battery}%" if battery is not None else "N/A"
+        bat_str = _format_battery(radio.get("battery_mv"), radio.get("battery_level"))
+        node_rows = ""
+        if radio.get("node_key"):
+            node_rows += f"<tr><td>Chiave nodo</td><td><code>{esc(radio['node_key'])}</code></td></tr>"
+        hw = " ".join(x for x in (radio.get("model"), radio.get("firmware")) if x)
+        if hw:
+            node_rows += f"<tr><td>Modello / firmware</td><td>{esc(hw)}</td></tr>"
         radio_info = f"""
         <div class="section">
         <h2>Stato Radio</h2>
@@ -694,6 +699,7 @@ def _render_dashboard_live(refresh_contacts=False):
             <table>
             <tr><td>Nome</td><td>{esc(radio.get('name', 'N/A'))}</td></tr>
             <tr><td>Porta</td><td>{esc(radio.get('port', 'N/A'))}</td></tr>
+            {node_rows}
             <tr><td>Batteria</td><td>{esc(bat_str)}</td></tr>
             <tr><td>Uptime</td><td>{esc(_format_uptime(radio.get('uptime_seconds', 0)))}</td></tr>
             <tr><td>Messaggi</td><td>{esc(radio.get('messages_processed', 0))}</td></tr>
@@ -1449,6 +1455,8 @@ def settings_page():
         <button type="submit" style="margin-top:1rem;max-width:200px">Salva</button>
         </form>
 
+        {_render_backup_section()}
+
         <div class="section">
         <h2>Orologio Companion</h2>
         <div class="card">
@@ -1493,6 +1501,20 @@ def settings_page():
             .catch(function(){{ document.getElementById('companion-time').textContent = 'N/A'; }});
         }})();
 
+        function runBackup() {{
+            if (!confirm('Eseguire ora il backup del database?')) return;
+            var btn = document.getElementById('backup-btn');
+            if (btn) btn.disabled = true;
+            apiFetch('/api/backup', {{method:'POST'}})
+            .then(function(r){{ return r.json(); }})
+            .then(function(d){{
+                showToast(d.message, d.ok, 3000);
+                if (d.ok) setTimeout(function(){{ location.reload(); }}, 1500);
+                else if (btn) btn.disabled = false;
+            }})
+            .catch(function(){{ if (btn) btn.disabled = false; alert('Errore di rete'); }});
+        }}
+
         function syncTime() {{
             if (!confirm('Sincronizzare orologio companion con ora Pi?')) return;
             apiFetch('/api/companion-time/sync', {{method:'POST'}})
@@ -1525,6 +1547,59 @@ def settings_page():
         }}
         </script>
     """, active="settings")
+
+
+def _render_backup_section():
+    """Small settings card: last backup, schedule, 'backup now' button."""
+    try:
+        from utils.config import get_config
+        from bbs.services.backup import backup_status
+        st = backup_status(get_config().database_path)
+    except Exception as e:
+        logger.debug(f"Backup status unavailable: {e}")
+        return ""
+    if st["last_time"]:
+        last = f"{st['last_time'].strftime('%d/%m/%Y %H:%M')} ({_format_bytes(st['last_size'] or 0)})"
+    else:
+        last = "nessuno"
+    sched = f"ogni notte alle {st['schedule']}" if st["enabled"] else "automatico disattivato"
+    error = ""
+    if st.get("last_error"):
+        error = f'<div style="color:#f87171;font-size:0.8rem">Ultimo errore: {esc(st["last_error"])}</div>'
+    return f"""
+        <div class="section">
+        <h2>Backup database</h2>
+        <div class="card">
+            <table>
+            <tr><td>Ultimo backup</td><td>{esc(last)}</td></tr>
+            <tr><td>Pianificazione</td><td>{esc(sched)}, conservati {esc(st['keep'])} ({esc(st['count'])} presenti)</td></tr>
+            <tr><td>Cartella</td><td><code>{esc(st['backup_dir'])}</code></td></tr>
+            </table>
+            {error}
+            <button id="backup-btn" class="btn-sm btn-blue" style="margin-top:0.5rem" onclick="runBackup()">Esegui backup ora</button>
+        </div>
+        </div>
+    """
+
+
+@app.route("/api/backup", method="POST")
+@require_auth
+def api_run_backup():
+    """Run a database backup now (same code as the nightly one)."""
+    response.content_type = "application/json"
+    try:
+        from utils.config import get_config
+        from bbs.services.backup import run_backup
+        result = run_backup(get_config().database_path, reason="manuale (web)")
+    except Exception as e:
+        logger.error(f"Manual backup error: {e}")
+        return json.dumps({"ok": False, "message": "Backup fallito"})
+    if result.ok:
+        return json.dumps({
+            "ok": True,
+            "message": f"Backup creato: {Path(result.path).name} ({_format_bytes(result.size)})",
+        })
+    return json.dumps({"ok": False, "message": f"Backup fallito: {result.error}"})
 
 
 @app.route("/api/settings", method="POST")
@@ -2154,6 +2229,10 @@ def _get_radio_status():
             data["name"] = state.radio_info.name
             data["port"] = state.radio_info.port
             data["battery_level"] = state.radio_info.battery_level
+            data["battery_mv"] = state.radio_info.battery_mv
+            data["node_key"] = (state.radio_info.public_key or "")[:12]
+            data["model"] = state.radio_info.model
+            data["firmware"] = state.radio_info.firmware_version
             if state.connected_at:
                 data["uptime_seconds"] = int((datetime.utcnow() - state.connected_at).total_seconds())
         return data
@@ -2317,6 +2396,19 @@ def _format_bytes(num_bytes):
             return f"{num_bytes:.1f} {unit}" if unit != "B" else f"{num_bytes} {unit}"
         num_bytes /= 1024
     return f"{num_bytes:.1f} TB"
+
+
+def _format_battery(millivolts, percent):
+    """'3.95 V (78%)', or N/A when the companion reports no battery."""
+    if not millivolts:
+        return "N/A"
+    try:
+        text = f"{int(millivolts) / 1000:.2f} V"
+    except (TypeError, ValueError):
+        return "N/A"
+    if percent is not None:
+        text += f" ({percent}%)"
+    return text
 
 
 def _format_uptime(seconds):

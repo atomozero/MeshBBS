@@ -242,11 +242,11 @@ def main():
     from bbs.models.base import init_database
     init_database(config.database_path)
 
-    # Initialize MQTT (optional)
-    from utils.mqtt import get_mqtt_client
-    mqtt = get_mqtt_client()
-    if mqtt.config.enabled:
-        logger.info(f"MQTT: {mqtt.config.host}:{mqtt.config.port}")
+    # MQTT (optional, MQTT_ENABLED=true): started by the BBS core
+    from utils.mqtt import MQTTConfig
+    mqtt_config = MQTTConfig.from_env()
+    if mqtt_config.enabled:
+        logger.info(f"MQTT: {mqtt_config.host}:{mqtt_config.port} (prefix {mqtt_config.topic_prefix})")
 
     # Run
     try:

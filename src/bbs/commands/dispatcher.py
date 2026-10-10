@@ -14,6 +14,7 @@ from .base import CommandContext, CommandResult, CommandRegistry
 from .parser import parse_command, is_command
 from bbs.repositories.user_repository import UserRepository
 from bbs.rate_limiter import RateLimiter
+from bbs.services.mqtt_bridge import emit_event
 
 try:
     from utils.logger import get_logger
@@ -111,6 +112,7 @@ class CommandDispatcher:
         welcome_msg = ""
         if is_new:
             logger.info(f"New user: {sender_key[:8]}...")
+            emit_event("user_joined", {"user": sender_key[:8]})
             from utils.config import get_config
             cfg = get_config()
             welcome_msg = (
@@ -178,6 +180,8 @@ class CommandDispatcher:
                 f"Executing !{parsed.command} from {ctx.sender_display}"
             )
             result = await command.execute(ctx, parsed.args)
+
+            emit_event("command", {"command": command.name, "ok": bool(result.success)})
 
             if result.success:
                 logger.debug(f"Command successful: {result.response[:50]}...")

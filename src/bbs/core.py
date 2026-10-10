@@ -169,7 +169,7 @@ class BBSCore:
 
         self._running = False
         self._advert_task: Optional[asyncio.Task] = None
-        self._stats_task: Optional[asyncio.Task] = None
+        self.ops = None  # bbs.services.ops.OpsServices (MQTT, backup, WAL)
         self._ws_status_task: Optional[asyncio.Task] = None
         self._beacon_task: Optional[asyncio.Task] = None
         self._watchdog_task: Optional[asyncio.Task] = None
@@ -246,8 +246,9 @@ class BBSCore:
         # Start periodic advert task
         self._advert_task = asyncio.create_task(self._periodic_advert())
 
-        # Start periodic MQTT stats publishing (if MQTT enabled)
-        self._stats_task = asyncio.create_task(self._periodic_stats_publish())
+        # MQTT bridge, nightly backup, WAL checkpoint
+        from bbs.services.ops import start_ops_services
+        self.ops = await start_ops_services(self)
 
         # Start periodic WebSocket status broadcasting
         self._ws_status_task = asyncio.create_task(self._periodic_ws_status())
@@ -293,6 +294,7 @@ class BBSCore:
             f"Connected! Identity: {self.connection.identity.name} "
             f"({self.connection.identity.short_key}...)"
         )
+        await self._sync_node_status(query=True)
 
         logger.info("Sending advertisement...")
         advert_ok = await self.connection.send_advert(flood=True)
@@ -318,8 +320,11 @@ class BBSCore:
         if self.repeater_monitor is not None:
             await self.repeater_monitor.stop()
 
+        if self.ops is not None:
+            await self.ops.stop()
+
         # Cancel background tasks (including pending reply senders)
-        tasks = [self._advert_task, self._stats_task, self._ws_status_task,
+        tasks = [self._advert_task, self._ws_status_task,
                  self._beacon_task, self._watchdog_task, self._retention_task]
         tasks.extend(self._send_workers.values())
         for task in tasks:
@@ -398,6 +403,8 @@ class BBSCore:
         # Update activity timestamp
         self._last_message_time = datetime.utcnow()
         await self.state_manager.update_activity()
+        if self.ops is not None:
+            self.ops.on_message(message)
 
         # Notify WebSocket clients of new message
         await self._ws_notify_message(message)
@@ -450,7 +457,7 @@ class BBSCore:
             )
 
             if response:
-                logger.info(f"Response to {sender_key[:8]}: {len(response)} chars")
+                logger.debug(f"Response to {sender_key[:8]}: {len(response)} chars")
                 logger.debug(f"Response: {response[:50]}...")
             else:
                 logger.debug("No response (not a command)")
@@ -735,11 +742,33 @@ class BBSCore:
                         continue
                     logger.debug("Keepalive OK")
                     self._housekeeping()
+                    await self._sync_node_status()
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Watchdog error: {e}")
+
+    async def _sync_node_status(self, query: bool = False) -> None:
+        """
+        Copy battery (and, after a connect, model/firmware) into the state.
+
+        The battery value comes for free from the keepalive probe (get_bat);
+        query=True also asks the companion for its device info.
+        """
+        try:
+            if query and hasattr(self.connection, "query_device_info"):
+                await self.connection.query_device_info()
+            device = getattr(self.connection, "device_info", None)
+            if isinstance(device, dict):
+                await self.state_manager.update_device_info(
+                    device.get("model"), device.get("firmware"))
+            battery = getattr(self.connection, "last_battery", None)
+            if isinstance(battery, dict) and "level" in battery:
+                await self.state_manager.update_battery(
+                    battery.get("level"), battery.get("used_kb"), battery.get("total_kb"))
+        except Exception as e:
+            logger.debug(f"Node status update failed: {e}")
 
     async def _do_reconnect(self, max_backoff: int = RECONNECT_MAX_DELAY) -> bool:
         """
@@ -895,37 +924,6 @@ class BBSCore:
                 break
             except Exception as e:
                 logger.error(f"Error sending beacon: {e}")
-
-    async def _periodic_stats_publish(self) -> None:
-        """
-        Periodically collect and publish stats via MQTT.
-
-        Runs every 5 minutes. Silently does nothing if MQTT is disabled.
-        """
-        from utils.mqtt import get_mqtt_client
-        from bbs.services.stats_collector import StatsCollector
-
-        interval = self.config.stats_publish_interval
-
-        while self._running:
-            try:
-                await asyncio.sleep(interval)
-
-                mqtt_client = get_mqtt_client()
-                if not mqtt_client.is_connected:
-                    continue
-
-                with get_session() as session:
-                    collector = StatsCollector(session)
-                    stats = collector.collect()
-
-                await mqtt_client.publish_stats(stats)
-                logger.debug("MQTT stats published")
-
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Error publishing MQTT stats: {e}")
 
 
 async def run_bbs(config: Optional[Config] = None, use_mock_fallback: bool = False) -> None:

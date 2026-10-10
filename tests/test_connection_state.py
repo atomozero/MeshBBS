@@ -180,13 +180,31 @@ class TestMeshCoreStateManager:
 
     @pytest.mark.asyncio
     async def test_update_battery(self, manager):
-        """Test updating battery info."""
+        """Battery mV from the companion -> mV + estimated LiPo %."""
         await manager.set_connected("key", "name", "/port", 115200, False)
 
-        await manager.update_battery(level=85, charging=True)
+        await manager.update_battery(4000, used_kb=10, total_kb=100)
 
-        assert manager.state.radio_info.battery_level == 85
-        assert manager.state.radio_info.battery_charging is True
+        info = manager.state.radio_info
+        assert info.battery_mv == 4000
+        assert info.battery_level == 80
+        assert info.storage_used_kb == 10 and info.storage_total_kb == 100
+        assert manager.to_dict()["radio"]["battery_mv"] == 4000
+
+    @pytest.mark.asyncio
+    async def test_update_battery_not_reported(self, manager):
+        """0 mV (no battery) is shown as unknown, not as empty."""
+        await manager.set_connected("key", "name", "/port", 115200, False)
+        await manager.update_battery(0)
+        assert manager.state.radio_info.battery_mv is None
+        assert manager.state.radio_info.battery_level is None
+
+    @pytest.mark.asyncio
+    async def test_update_device_info(self, manager):
+        await manager.set_connected("key", "name", "/port", 115200, False)
+        await manager.update_device_info("Heltec V3", "v1.9.1")
+        assert manager.state.radio_info.model == "Heltec V3"
+        assert manager.state.radio_info.firmware_version == "v1.9.1"
 
     @pytest.mark.asyncio
     async def test_to_dict_disconnected(self, manager):
