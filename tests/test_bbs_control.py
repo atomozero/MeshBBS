@@ -136,7 +136,7 @@ class TestBBSRestart:
 
     def test_restart_no_bbs_instance(self, client, superadmin_headers):
         """Restart returns 503 when BBS is not running."""
-        with patch("launcher.get_bbs_instance", return_value=None):
+        with patch("bbs.runtime.get_bbs_instance", return_value=None):
             response = client.post("/api/v1/bbs/restart", headers=superadmin_headers)
         assert response.status_code == 503
 
@@ -146,7 +146,7 @@ class TestBBSRestart:
         mock_bbs._running = True
         mock_bbs.stop = AsyncMock()
 
-        with patch("launcher.get_bbs_instance", return_value=mock_bbs):
+        with patch("bbs.runtime.get_bbs_instance", return_value=mock_bbs):
             response = client.post("/api/v1/bbs/restart", headers=superadmin_headers)
 
         assert response.status_code == 200
@@ -164,7 +164,7 @@ class TestBBSAdvert:
 
     def test_advert_no_bbs(self, client, admin_headers):
         """Advert returns 503 when BBS is not running."""
-        with patch("launcher.get_bbs_instance", return_value=None):
+        with patch("bbs.runtime.get_bbs_instance", return_value=None):
             response = client.post("/api/v1/bbs/advert", headers=admin_headers)
         assert response.status_code == 503
 
@@ -175,7 +175,7 @@ class TestBBSAdvert:
         mock_bbs.connection = MagicMock()
         mock_bbs.connection.send_advert = AsyncMock(return_value=True)
 
-        with patch("launcher.get_bbs_instance", return_value=mock_bbs):
+        with patch("bbs.runtime.get_bbs_instance", return_value=mock_bbs):
             response = client.post("/api/v1/bbs/advert", headers=admin_headers)
 
         assert response.status_code == 200

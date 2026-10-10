@@ -74,7 +74,7 @@ Examples:
     parser.add_argument(
         "--version",
         action="version",
-        version="MeshCore BBS v0.1.0",
+        version="MeshCore BBS v1.6.0",
     )
 
     return parser.parse_args()
@@ -93,7 +93,7 @@ def main():
     )
 
     logger.info("=" * 50)
-    logger.info("MeshCore BBS v0.1.0")
+    logger.info("MeshCore BBS v1.6.0")
     logger.info("=" * 50)
 
     # Create configuration

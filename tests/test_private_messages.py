@@ -18,7 +18,7 @@ class TestMsgCommand:
 
     @pytest.mark.asyncio
     async def test_msg_no_args(self, db_session: Session, test_sender_key: str):
-        """Test /msg without arguments shows usage."""
+        """Test !msg without arguments shows usage."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch("!msg", test_sender_key)
 
@@ -27,7 +27,7 @@ class TestMsgCommand:
 
     @pytest.mark.asyncio
     async def test_msg_no_message(self, db_session: Session, test_sender_key: str):
-        """Test /msg with only recipient shows usage."""
+        """Test !msg with only recipient shows usage."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch("!msg someone", test_sender_key)
 
@@ -36,7 +36,7 @@ class TestMsgCommand:
 
     @pytest.mark.asyncio
     async def test_msg_user_not_found(self, db_session: Session, test_sender_key: str):
-        """Test /msg to non-existent user."""
+        """Test !msg to non-existent user."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch("!msg nonexistent Hello!", test_sender_key)
 
@@ -137,23 +137,23 @@ class TestMsgCommand:
     async def test_msg_aliases(
         self, db_session: Session, test_sender_key: str, test_sender_key_2: str
     ):
-        """Test /pm, /dm, /tell aliases work."""
+        """Test !pm, !dm, !tell aliases work."""
         recipient = User(public_key=test_sender_key_2, nickname="Mario")
         db_session.add(recipient)
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
 
-        # Test /pm
-        response = await dispatcher.dispatch("/pm Mario Test 1", test_sender_key)
+        # Test !pm
+        response = await dispatcher.dispatch("!pm Mario Test 1", test_sender_key)
         assert "inviato" in response.lower()
 
-        # Test /dm
-        response = await dispatcher.dispatch("/dm Mario Test 2", test_sender_key)
+        # Test !dm
+        response = await dispatcher.dispatch("!dm Mario Test 2", test_sender_key)
         assert "inviato" in response.lower()
 
-        # Test /tell
-        response = await dispatcher.dispatch("/tell Mario Test 3", test_sender_key)
+        # Test !tell
+        response = await dispatcher.dispatch("!tell Mario Test 3", test_sender_key)
         assert "inviato" in response.lower()
 
 
@@ -162,7 +162,7 @@ class TestInboxCommand:
 
     @pytest.mark.asyncio
     async def test_inbox_empty(self, db_session: Session, test_sender_key: str):
-        """Test /inbox with no messages."""
+        """Test !inbox with no messages."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch("!inbox", test_sender_key)
 
@@ -173,7 +173,7 @@ class TestInboxCommand:
     async def test_inbox_with_messages(
         self, db_session: Session, test_sender_key: str, test_sender_key_2: str
     ):
-        """Test /inbox shows received messages."""
+        """Test !inbox shows received messages."""
         # Create sender
         sender = User(public_key=test_sender_key_2, nickname="Sender")
         db_session.add(sender)
@@ -203,7 +203,7 @@ class TestInboxCommand:
     async def test_inbox_shows_unread_count(
         self, db_session: Session, test_sender_key: str, test_sender_key_2: str
     ):
-        """Test /inbox shows unread count."""
+        """Test !inbox shows unread count."""
         sender = User(public_key=test_sender_key_2, nickname="Sender")
         recipient = User(public_key=test_sender_key)
         db_session.add_all([sender, recipient])
@@ -224,7 +224,7 @@ class TestInboxCommand:
     async def test_inbox_with_limit(
         self, db_session: Session, test_sender_key: str, test_sender_key_2: str
     ):
-        """Test /inbox with custom limit."""
+        """Test !inbox with custom limit."""
         sender = User(public_key=test_sender_key_2, nickname="Sender")
         recipient = User(public_key=test_sender_key)
         db_session.add_all([sender, recipient])
@@ -243,7 +243,7 @@ class TestInboxCommand:
 
     @pytest.mark.asyncio
     async def test_inbox_invalid_limit(self, db_session: Session, test_sender_key: str):
-        """Test /inbox with invalid limit."""
+        """Test !inbox with invalid limit."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch("!inbox abc", test_sender_key)
 
@@ -252,14 +252,12 @@ class TestInboxCommand:
 
     @pytest.mark.asyncio
     async def test_inbox_aliases(self, db_session: Session, test_sender_key: str):
-        """Test /mail, /pms aliases work."""
+        """Test !pms alias works (!mail is now the separate mailbox command)."""
         dispatcher = CommandDispatcher(session=db_session)
 
-        response = await dispatcher.dispatch("/mail", test_sender_key)
+        response = await dispatcher.dispatch("!pms", test_sender_key)
         assert response is not None
-
-        response = await dispatcher.dispatch("/pms", test_sender_key)
-        assert response is not None
+        assert "sconosciuto" not in response.lower()
 
 
 class TestReadPmCommand:
@@ -267,7 +265,7 @@ class TestReadPmCommand:
 
     @pytest.mark.asyncio
     async def test_readpm_no_args(self, db_session: Session, test_sender_key: str):
-        """Test /readpm without arguments."""
+        """Test !readpm without arguments."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch("!readpm", test_sender_key)
 
@@ -276,7 +274,7 @@ class TestReadPmCommand:
 
     @pytest.mark.asyncio
     async def test_readpm_invalid_id(self, db_session: Session, test_sender_key: str):
-        """Test /readpm with invalid ID."""
+        """Test !readpm with invalid ID."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch("!readpm abc", test_sender_key)
 
@@ -285,7 +283,7 @@ class TestReadPmCommand:
 
     @pytest.mark.asyncio
     async def test_readpm_not_found(self, db_session: Session, test_sender_key: str):
-        """Test /readpm with non-existent message."""
+        """Test !readpm with non-existent message."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch("!readpm 99999", test_sender_key)
 
@@ -387,7 +385,7 @@ class TestReadPmCommand:
     async def test_readpm_aliases(
         self, db_session: Session, test_sender_key: str, test_sender_key_2: str
     ):
-        """Test /rpm, /viewpm aliases work."""
+        """Test !rpm, !viewpm aliases work."""
         sender = User(public_key=test_sender_key_2, nickname="Sender")
         recipient = User(public_key=test_sender_key)
         db_session.add_all([sender, recipient])
@@ -399,10 +397,10 @@ class TestReadPmCommand:
 
         dispatcher = CommandDispatcher(session=db_session)
 
-        response = await dispatcher.dispatch(f"/rpm {msg.id}", test_sender_key)
+        response = await dispatcher.dispatch(f"!rpm {msg.id}", test_sender_key)
         assert "Test" in response
 
-        response = await dispatcher.dispatch(f"/viewpm {msg.id}", test_sender_key)
+        response = await dispatcher.dispatch(f"!viewpm {msg.id}", test_sender_key)
         assert "Test" in response
 
 

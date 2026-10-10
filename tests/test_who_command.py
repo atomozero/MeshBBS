@@ -18,7 +18,7 @@ class TestWhoCommand:
 
     @pytest.mark.asyncio
     async def test_who_no_users(self, db_session: Session, test_sender_key: str):
-        """Test /who with no other active users."""
+        """Test !who with no other active users."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch("!who", test_sender_key)
 
@@ -28,7 +28,7 @@ class TestWhoCommand:
 
     @pytest.mark.asyncio
     async def test_who_shows_active_user(self, db_session: Session, test_sender_key: str):
-        """Test /who shows the current user as active."""
+        """Test !who shows the current user as active."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch("!who", test_sender_key)
 
@@ -41,7 +41,7 @@ class TestWhoCommand:
     async def test_who_with_multiple_users(
         self, db_session: Session, test_sender_key: str, test_sender_key_2: str
     ):
-        """Test /who shows multiple active users."""
+        """Test !who shows multiple active users."""
         # Create first user by calling a command
         dispatcher = CommandDispatcher(session=db_session)
         await dispatcher.dispatch("!help", test_sender_key)
@@ -58,7 +58,7 @@ class TestWhoCommand:
 
     @pytest.mark.asyncio
     async def test_who_with_nickname(self, db_session: Session, test_sender_key: str):
-        """Test /who shows nickname instead of key."""
+        """Test !who shows nickname instead of key."""
         dispatcher = CommandDispatcher(session=db_session)
 
         # Set nickname first
@@ -72,7 +72,7 @@ class TestWhoCommand:
 
     @pytest.mark.asyncio
     async def test_who_with_hours_argument(self, db_session: Session, test_sender_key: str):
-        """Test /who with custom hours argument."""
+        """Test !who with custom hours argument."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch("!who 12", test_sender_key)
 
@@ -81,7 +81,7 @@ class TestWhoCommand:
 
     @pytest.mark.asyncio
     async def test_who_invalid_hours(self, db_session: Session, test_sender_key: str):
-        """Test /who with invalid hours argument."""
+        """Test !who with invalid hours argument."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch("!who abc", test_sender_key)
 
@@ -90,7 +90,7 @@ class TestWhoCommand:
 
     @pytest.mark.asyncio
     async def test_who_negative_hours(self, db_session: Session, test_sender_key: str):
-        """Test /who with negative hours."""
+        """Test !who with negative hours."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch("!who -5", test_sender_key)
 
@@ -99,7 +99,7 @@ class TestWhoCommand:
 
     @pytest.mark.asyncio
     async def test_who_max_hours_limit(self, db_session: Session, test_sender_key: str):
-        """Test /who caps hours at maximum."""
+        """Test !who caps hours at maximum."""
         dispatcher = CommandDispatcher(session=db_session)
         # 1000 hours should be capped to 168 (MAX_HOURS)
         response = await dispatcher.dispatch("!who 1000", test_sender_key)
@@ -110,7 +110,7 @@ class TestWhoCommand:
 
     @pytest.mark.asyncio
     async def test_who_shows_admin_indicator(self, db_session: Session, test_sender_key: str):
-        """Test /who shows [A] for admin users."""
+        """Test !who shows [A] for admin users."""
         # Create admin user
         admin_user = User(
             public_key=test_sender_key,
@@ -129,7 +129,7 @@ class TestWhoCommand:
 
     @pytest.mark.asyncio
     async def test_who_shows_moderator_indicator(self, db_session: Session, test_sender_key: str):
-        """Test /who shows [M] for moderator users."""
+        """Test !who shows [M] for moderator users."""
         # Create moderator user
         mod_user = User(
             public_key=test_sender_key,
@@ -148,7 +148,7 @@ class TestWhoCommand:
 
     @pytest.mark.asyncio
     async def test_who_excludes_banned_users(self, db_session: Session, test_sender_key: str):
-        """Test /who does not show banned users."""
+        """Test !who does not show banned users."""
         # Create banned user
         banned_key = "C" * 64
         banned_user = User(
@@ -168,9 +168,9 @@ class TestWhoCommand:
 
     @pytest.mark.asyncio
     async def test_who_alias_users(self, db_session: Session, test_sender_key: str):
-        """Test /users alias works."""
+        """Test !users alias works."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/users", test_sender_key)
+        response = await dispatcher.dispatch("!users", test_sender_key)
 
         assert response is not None
         assert "[BBS]" in response
@@ -178,9 +178,9 @@ class TestWhoCommand:
 
     @pytest.mark.asyncio
     async def test_who_alias_online(self, db_session: Session, test_sender_key: str):
-        """Test /online alias works."""
+        """Test !online alias works."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/online", test_sender_key)
+        response = await dispatcher.dispatch("!online", test_sender_key)
 
         assert response is not None
         assert "[BBS]" in response
@@ -188,7 +188,7 @@ class TestWhoCommand:
 
     @pytest.mark.asyncio
     async def test_who_inactive_users_not_shown(self, db_session: Session, test_sender_key: str):
-        """Test /who does not show users inactive beyond the time window."""
+        """Test !who does not show users inactive beyond the time window."""
         # Create old user (inactive for 48 hours)
         old_key = "D" * 64
         old_user = User(

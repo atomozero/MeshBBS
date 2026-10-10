@@ -27,6 +27,22 @@ from utils.config import Config, set_config
 from web.auth.models import AdminUser as AdminUserModel
 
 
+@pytest.fixture(autouse=True)
+def _isolate_command_registry():
+    """
+    Snapshot the global CommandRegistry before each test and restore it
+    afterwards, so tests that clear() it or register throw-away commands
+    (e.g. the plugin system tests) don't leak into later tests.
+    """
+    import bbs.commands  # noqa: F401  - make sure built-ins are registered
+    from bbs.commands.base import CommandRegistry
+
+    CommandRegistry.ensure_builtins()
+    state = CommandRegistry.snapshot()
+    yield
+    CommandRegistry.restore(state)
+
+
 @pytest.fixture(scope="session")
 def event_loop():
     """Create event loop for async tests."""

@@ -82,14 +82,15 @@ async def restart_bbs(
 
     async def _do_restart():
         """Perform restart in background."""
-        import launcher
+        from bbs.runtime import set_bbs_instance
         from utils.config import get_config
 
         config = get_config()
 
-        # Stop current instance
+        # Stop current instance. The shared instance lives in bbs.runtime
+        # (launcher only re-exports the getter), so update it there.
         await bbs.stop()
-        launcher._bbs_instance = None
+        set_bbs_instance(None)
 
         # Brief pause to let radio reset
         await asyncio.sleep(2)
@@ -97,7 +98,7 @@ async def restart_bbs(
         # Start new instance
         from bbs.core import BBSCore
         new_bbs = BBSCore(config)
-        launcher._bbs_instance = new_bbs
+        set_bbs_instance(new_bbs)
 
         await new_bbs.start()
         asyncio.create_task(new_bbs.run())

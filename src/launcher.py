@@ -46,6 +46,7 @@ Examples:
   python launcher.py --bbs-only               # BBS radio only
   python launcher.py -p /dev/ttyACM0 --debug  # Custom port + debug
   python launcher.py --web-port 9090          # Custom web port
+  python launcher.py --mock                   # Dev: simulated radio fallback
         """,
     )
 
@@ -56,6 +57,9 @@ Examples:
                         help="TCP host for companion radio (default: 192.168.1.100)")
     parser.add_argument("--tcp-port", type=int, default=5000,
                         help="TCP port for companion radio (default: 5000)")
+    parser.add_argument("--mock", action="store_true",
+                        help="Development only: use a simulated radio if the "
+                             "real one is unreachable (never in production)")
 
     # Serial options (default mode)
     parser.add_argument("-p", "--port", default="/dev/ttyUSB0",
@@ -87,7 +91,7 @@ Examples:
     parser.add_argument("--log-file", default="logs/bbs.log",
                         help="Log file path (default: logs/bbs.log)")
     parser.add_argument("--version", action="version",
-                        version="MeshBBS v1.5.0")
+                        version="MeshBBS v1.6.0")
 
     return parser.parse_args()
 
@@ -103,12 +107,19 @@ async def run_web_server(host: str, port: int, debug: bool):
         await asyncio.sleep(60)
 
 
-async def run_bbs(config: Config):
-    """Run the BBS radio service."""
+async def run_bbs(config: Config, use_mock: bool = False):
+    """
+    Run the BBS radio service.
+
+    Args:
+        config: BBS configuration
+        use_mock: Allow falling back to a simulated radio (--mock).
+            Without it the BBS keeps retrying the real radio.
+    """
     from bbs.core import BBSCore
     from bbs.runtime import set_bbs_instance
 
-    bbs = BBSCore(config)
+    bbs = BBSCore(config, use_mock_fallback=use_mock)
     set_bbs_instance(bbs)
 
     try:
@@ -116,7 +127,11 @@ async def run_bbs(config: Config):
         await bbs.run()
     finally:
         await bbs.stop()
-        set_bbs_instance(None)
+        # A web-triggered restart may already have installed a new instance:
+        # only clear the shared reference if it still points to this one.
+        from bbs.runtime import get_bbs_instance as _current_bbs
+        if _current_bbs() is bbs:
+            set_bbs_instance(None)
 
 
 async def run_all(args, config: Config):
@@ -130,8 +145,13 @@ async def run_all(args, config: Config):
 
     if not args.web_only:
         logger.info("Starting BBS radio service...")
+        if getattr(args, "mock", False):
+            logger.warning("Mock radio fallback enabled (--mock): development only")
+            bbs_coro = run_bbs(config, use_mock=True)
+        else:
+            bbs_coro = run_bbs(config)
         tasks.append(asyncio.create_task(
-            run_bbs(config),
+            bbs_coro,
             name="bbs",
         ))
 
@@ -176,7 +196,7 @@ def main():
     logger = get_logger("meshbbs.launcher")
 
     logger.info("=" * 50)
-    logger.info("MeshBBS v1.5.0 - Unified Launcher")
+    logger.info("MeshBBS v1.6.0 - Unified Launcher")
     logger.info("=" * 50)
 
     # Create BBS configuration

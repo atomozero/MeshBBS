@@ -16,7 +16,7 @@ class TestPromoteCommand:
 
     @pytest.mark.asyncio
     async def test_promote_no_args(self, db_session: Session, admin_sender_key: str):
-        """Test /promote without arguments shows usage."""
+        """Test !promote without arguments shows usage."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch("!promote", admin_sender_key)
 
@@ -42,7 +42,7 @@ class TestPromoteCommand:
     async def test_promote_user_not_found(
         self, db_session: Session, admin_sender_key: str
     ):
-        """Test /promote with non-existent user."""
+        """Test !promote with non-existent user."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch("!promote NonExistent", admin_sender_key)
 
@@ -182,7 +182,7 @@ class TestDemoteCommand:
 
     @pytest.mark.asyncio
     async def test_demote_no_args(self, db_session: Session, admin_sender_key: str):
-        """Test /demote without arguments shows usage."""
+        """Test !demote without arguments shows usage."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch("!demote", admin_sender_key)
 
@@ -272,7 +272,7 @@ class TestDemoteCommand:
     async def test_demote_user_not_found(
         self, db_session: Session, admin_sender_key: str
     ):
-        """Test /demote with non-existent user."""
+        """Test !demote with non-existent user."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch("!demote NonExistent", admin_sender_key)
 
@@ -285,7 +285,7 @@ class TestStaffCommand:
 
     @pytest.mark.asyncio
     async def test_staff_no_staff(self, db_session: Session, test_sender_key: str):
-        """Test /staff with no staff configured."""
+        """Test !staff with no staff configured."""
         # Clear admin from fixture by creating a fresh user
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch("!staff", test_sender_key)
@@ -298,7 +298,7 @@ class TestStaffCommand:
     async def test_staff_shows_admins(
         self, db_session: Session, test_sender_key: str, admin_sender_key: str
     ):
-        """Test /staff shows admin users."""
+        """Test !staff shows admin users."""
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch("!staff", test_sender_key)
 
@@ -310,7 +310,7 @@ class TestStaffCommand:
     async def test_staff_shows_moderators(
         self, db_session: Session, test_sender_key: str, test_sender_key_2: str
     ):
-        """Test /staff shows moderators."""
+        """Test !staff shows moderators."""
         mod = User(public_key=test_sender_key_2, nickname="ModUser", is_moderator=True)
         db_session.add(mod)
         db_session.commit()
@@ -326,7 +326,7 @@ class TestStaffCommand:
     async def test_staff_shows_both(
         self, db_session: Session, test_sender_key: str, admin_sender_key: str, test_sender_key_2: str
     ):
-        """Test /staff shows both admins and moderators."""
+        """Test !staff shows both admins and moderators."""
         mod = User(public_key=test_sender_key_2, nickname="ModUser", is_moderator=True)
         db_session.add(mod)
         db_session.commit()
@@ -344,9 +344,9 @@ class TestStaffCommand:
     async def test_staff_alias_mods(
         self, db_session: Session, test_sender_key: str, admin_sender_key: str
     ):
-        """Test /mods alias works."""
+        """Test !mods alias works."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/mods", test_sender_key)
+        response = await dispatcher.dispatch("!mods", test_sender_key)
 
         assert response is not None
         assert "staff" in response.lower()
@@ -355,9 +355,9 @@ class TestStaffCommand:
     async def test_staff_alias_admins(
         self, db_session: Session, test_sender_key: str, admin_sender_key: str
     ):
-        """Test /admins alias works."""
+        """Test !admins alias works."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/admins", test_sender_key)
+        response = await dispatcher.dispatch("!admins", test_sender_key)
 
         assert response is not None
         assert "staff" in response.lower()
@@ -366,7 +366,7 @@ class TestStaffCommand:
     async def test_staff_available_to_all(
         self, db_session: Session, test_sender_key: str, admin_sender_key: str
     ):
-        """Test /staff is available to non-admin users."""
+        """Test !staff is available to non-admin users."""
         # Regular user should be able to use /staff
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch("!staff", test_sender_key)

@@ -178,7 +178,7 @@ class PluginManager:
             # Register commands
             for command_class in plugin.get_commands():
                 CommandRegistry.register(command_class)
-                logger.debug(f"Registered command /{command_class.name} from {name}")
+                logger.debug(f"Registered command !{command_class.name} from {name}")
 
             plugin._state = PluginState.LOADED
             plugin._loaded_at = datetime.utcnow()
@@ -217,8 +217,10 @@ class PluginManager:
 
             # Unregister commands
             for command_class in plugin.get_commands():
-                # CommandRegistry doesn't have unregister, but we can note this limitation
-                logger.debug(f"Plugin commands remain registered until restart")
+                if CommandRegistry.unregister(command_class):
+                    logger.debug(f"Unregistered command !{command_class.name} from {name}")
+            # Restore any built-in command a plugin may have shadowed
+            CommandRegistry.ensure_builtins()
 
             plugin._state = PluginState.UNLOADED
             del self._plugins[name]
