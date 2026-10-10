@@ -13,11 +13,38 @@ http://<ip-bbs>:8080
 
 ## Autenticazione
 
-Login tramite form HTML su `/login`. Le sessioni usano cookie firmati.
+Login tramite form HTML su `/login` (`POST`, con token CSRF del form).
+Logout con `POST /logout` (non più `GET`).
 
 Credenziali configurate in `config.env`:
 - `ADMIN_USERNAME` (default: `admin`)
-- `ADMIN_PASSWORD`
+- `ADMIN_PASSWORD` — **obbligatoria**, nessun valore predefinito. Se non è impostata o
+  vale `meshbbs123` / un segnaposto della documentazione, il login è disabilitato e la
+  pagina di login lo segnala. `deploy/install.sh` genera una password casuale.
+
+Sessioni:
+- id di sessione casuale lato server, cookie `session` con `HttpOnly` e `SameSite=Strict`
+  (`Secure` quando il pannello è servito in HTTPS)
+- scadenza per inattività `WEB_SESSION_TTL` (secondi, default 28800 = 8 ore)
+- credenziali verificate con confronto a tempo costante
+
+Protezione CSRF: ogni richiesta `POST`/`PUT`/`PATCH`/`DELETE` deve:
+- avere `Origin` (o `Referer`) uguale all'host del pannello, altrimenti `403` `bad_origin`
+- includere il token CSRF della sessione nell'header `X-CSRF-Token` (o nel campo form
+  `csrf_token`), altrimenti `403` `csrf`
+
+Le pagine del pannello inviano già il token in automatico; per chiamate da script
+occorre prima autenticarsi e leggere il token dal tag `<meta name="csrf-token">` di una pagina.
+
+Senza sessione valida le pagine HTML reindirizzano a `/login`, mentre le chiamate
+`/api/*` (eccetto `/api/health`) rispondono `401`:
+
+```json
+{"ok": false, "error": "unauthorized", "message": "Sessione scaduta: effettua di nuovo il login"}
+```
+
+Tutte le risposte includono `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+`Referrer-Policy: strict-origin-when-cross-origin` e `Cache-Control: no-store`.
 
 ---
 
@@ -36,13 +63,13 @@ Pagina principale con:
 
 ### Messaggi (`/messages`)
 
-Lista ultimi 25 messaggi con:
+Lista messaggi paginata (25 per pagina, parametro `?p=N`) con:
 - ID, autore, area, anteprima messaggio, data
 - Auto-refresh ogni 15 secondi
 
 ### Utenti (`/users`)
 
-Gestione utenti con azioni admin:
+Gestione utenti con azioni admin (paginata, 50 per pagina, parametro `?p=N`):
 - Lista utenti con nome, chiave pubblica, stato, messaggi, ultimo accesso
 - Bottoni azione per ogni utente:
   - **Mod** — promuove a moderatore
@@ -69,6 +96,8 @@ Visualizzazione rete mesh:
 - Tabella nodi raggruppati per tipologia
 - Indicatore GPS per nodi con coordinate
 - Auto-refresh ogni 15 secondi
+- La lista nodi è in cache per `WEB_NODES_CACHE_TTL` secondi (default 60); i contatti
+  vengono riletti dalla radio al massimo ogni `WEB_CONTACTS_REFRESH` secondi (default 60)
 
 ### Log (`/logs`)
 
@@ -246,7 +275,9 @@ Si aggiorna automaticamente ogni 10 secondi tramite `/api/health`.
 ## Note Tecniche
 
 - Il web server usa **bottle.py** (singolo file, zero dipendenze compilate)
-- Gira in un **thread daemon** separato dal BBS
+- Gira in un **thread daemon** separato dal BBS, con server WSGI **multi-thread**
+  (una richiesta lenta non blocca le altre)
+- Tutti i dati mostrati nelle pagine passano per l'escaping HTML
 - Comunicazione con il BBS tramite **bbs.runtime** (variabili condivise)
 - Operazioni async (advert, refresh contatti) usano **run_coroutine_threadsafe**
 - La mappa usa **Leaflet.js** caricato da CDN

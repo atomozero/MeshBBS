@@ -18,7 +18,20 @@ Guida all'installazione di MeshBBS su Raspberry Pi (incluso Pi Zero W).
 
 ---
 
-## Installazione Rapida
+## Installazione Automatica
+
+```bash
+git clone https://github.com/atomozero/MeshBBS.git
+cd MeshBBS
+sudo ./deploy/install.sh
+```
+
+Lo script genera una **password admin casuale**, la salva come `ADMIN_PASSWORD` in
+`/var/lib/meshbbs/config.env` e la stampa **una sola volta** a fine installazione: annotala.
+
+---
+
+## Installazione Manuale
 
 ### 1. Prepara il sistema
 
@@ -51,18 +64,22 @@ sudo -u meshbbs /opt/meshbbs/venv/bin/pip install --upgrade pip
 sudo -u meshbbs /opt/meshbbs/venv/bin/pip install --no-deps meshcore
 sudo -u meshbbs /opt/meshbbs/venv/bin/pip install SQLAlchemy pycryptodome pycayennelpp pyserial pyserial-asyncio-fast
 
-# Opzionale: RSS news
+# RSS news per !news (incluso in requirements.txt / requirements-light.txt)
 sudo -u meshbbs /opt/meshbbs/venv/bin/pip install feedparser
 ```
 
 ### 5. Crea configurazione
 
 ```bash
-sudo tee /var/lib/meshbbs/config.env << 'EOF'
+# Genera una password admin casuale (annotala!)
+ADMIN_PW="$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c 20)"
+echo "Password admin web: $ADMIN_PW"
+
+sudo tee /var/lib/meshbbs/config.env << EOF
 BBS_NAME=MeshBBS
 DATABASE_PATH=/var/lib/meshbbs/meshbbs.db
 ADMIN_USERNAME=admin
-ADMIN_PASSWORD=CAMBIA_QUESTA_PASSWORD
+ADMIN_PASSWORD=$ADMIN_PW
 LOG_LEVEL=INFO
 LOG_FILE=/var/log/meshbbs/meshbbs.log
 EOF
@@ -70,6 +87,11 @@ EOF
 sudo chmod 600 /var/lib/meshbbs/config.env
 sudo chown meshbbs:meshbbs /var/lib/meshbbs/config.env
 ```
+
+> Non esiste una password predefinita: se `ADMIN_PASSWORD` è vuota o vale `meshbbs123`
+> (o un segnaposto di esempio) il login web resta **disabilitato** finché non imposti
+> una password robusta e riavvii il servizio. Opzionale: `WEB_SESSION_TTL` (secondi,
+> default 28800 = 8 ore) imposta la scadenza della sessione per inattività.
 
 ### 6. Crea servizio systemd
 
@@ -110,6 +132,9 @@ EOF
 ```
 
 Modifica `--tcp-host` con l'IP del tuo companion radio.
+
+Non usare `--mock` nei servizi di produzione: senza quel flag il BBS si avvia anche se
+il companion è spento o irraggiungibile e ritenta la connessione da solo (backoff fino a 5 minuti).
 
 #### Connessione seriale (USB companion)
 
@@ -169,7 +194,8 @@ curl http://localhost:8080/api/health
 
 Apri nel browser: `http://<IP-DELLA-PI>:8080`
 
-Credenziali: `admin` / la password impostata nel config.env
+Credenziali: `admin` / la password `ADMIN_PASSWORD` del config.env
+(generata da `install.sh` oppure scelta da te al passo 5)
 
 ---
 
@@ -178,8 +204,16 @@ Credenziali: `admin` / la password impostata nel config.env
 ```bash
 cd /opt/meshbbs
 sudo -u meshbbs git pull
+sudo -u meshbbs /opt/meshbbs/venv/bin/pip install feedparser   # nuova dipendenza dalla 1.6.0
 sudo systemctl restart meshbbs
 ```
+
+Aggiornando alla 1.6.0:
+- se `config.env` contiene ancora `ADMIN_PASSWORD=meshbbs123` il login web viene disabilitato:
+  imposta una nuova password e riavvia
+- `COOKIE_SECRET` non è più usato e può essere rimosso
+- al primo avvio le chiavi utente vengono normalizzate automaticamente (eventuali duplicati
+  dello stesso nodo vengono uniti)
 
 ---
 

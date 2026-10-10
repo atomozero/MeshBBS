@@ -4,6 +4,86 @@ Tutte le modifiche notevoli al progetto MeshCore BBS saranno documentate in ques
 
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.6.0] - 2026-10-10
+
+Revisione generale di stabilità radio, sicurezza e comandi (audit ottobre 2026).
+
+### Corretto
+
+#### Radio e core
+- **Advert realmente inviati**: l'advertisement usa `send_advert` in flood; rimosso il reset di `set_flood_scope` che lo rendeva inefficace
+- **Avvio con radio offline**: il BBS parte anche se il companion non risponde e ritenta all'infinito con backoff 5s → 10s → 20s ... fino a 300s
+- **Rilevamento link morto**: probe attivo (`get_bat`) ogni 150s, indipendente dal traffico, con un secondo tentativo dopo 5s; anche l'evento `DISCONNECTED` della libreria avvia la riconnessione
+- **Timeout di connessione** di 15s con pulizia completa delle risorse in caso di fallimento
+- **Chiavi meshcore 2.3.6**: lette correttamente `path_len` (→ hop), SNR/RSSI e `public_key`
+- **Messaggi di canale**: il nome del mittente viene estratto dal formato `"Nome: testo"`
+- **Chunking UTF-8 per byte**: le risposte sono spezzate a 140 byte senza troncare caratteri multi-byte (accenti, emoji)
+- **Invio per destinatario**: un worker di invio per ogni destinatario, code limitate, invio interrotto al primo chunk fallito (niente risposte "a buchi")
+- **Lock dei comandi radio**: i comandi verso il companion sono serializzati, niente risposte incrociate tra richieste concorrenti
+- **Monitor ripetitori**: usa `send_login_sync` / `req_status_sync` e aggiorna i contatti prima del login
+- **Beacon**: un errore nel template del messaggio non ferma più il beacon
+- **Rate limiter realmente attivo**: un'unica istanza condivisa tra le chiamate; lo stato admin è verificato a ogni comando
+- **Memoria limitata**: `flush_pending_contacts` scarta periodicamente i contatti pendenti accumulati in memoria dalla libreria meshcore
+- In modalità TCP i log e la dashboard mostrano `host:porta` invece della porta seriale
+
+#### Comandi
+- **`!mail`**: corretto l'invio; rispetta mute e destinatari bannati, limiti di lunghezza su oggetto (40) e corpo (200)
+- **`!delarea`**: eliminazione a cascata dei messaggi dell'area; l'area predefinita è protetta
+- **Dispatcher**: rollback della sessione database se un comando va in errore
+- **Aree nascoste**: rispettate da `!post`, `!read`, `!reply` e `!search`
+- **`!reply`** rispetta le aree in sola lettura; **`!board post`** applica gli stessi controlli di `!post` (utenti mutati/espulsi/bannati, bacheca in sola lettura)
+- **`!inbox`**: i PM effimeri vengono mostrati per intero (massimo 3 per chiamata)
+- **`BBS_ALLOW_EPHEMERAL_PM`** ora viene effettivamente rispettato da `!msg!`
+- **`!news`**: download e parsing asincroni con timeout, il feed lento non blocca più il BBS
+- **Parsing numeri**: ID e argomenti numerici rifiutano cifre Unicode non ASCII e valori fuori scala
+- **`!delete`** aggiorna i contatori messaggi; **`!kick 0`** viene rifiutato
+- **`!meteo`**: coordinate `0.0` considerate valide (solo l'assenza di coordinate è un errore)
+- **`!trivia`**: risposte corrette distribuite in modo uniforme tra A/B/C (prima quasi sempre B)
+- **Menzioni**: la regex `@nick` accetta il carattere `-`
+- I suggerimenti nelle risposte usano il prefisso `!` (non più `/`)
+
+### Sicurezza
+
+#### Identità utenti e ricerca
+- **Chiave utente canonica**: l'identità è il prefisso di 12 caratteri esadecimali minuscoli della chiave pubblica (quello che MeshCore invia nei DM). All'avvio una migrazione idempotente (`normalize_user_keys`) unisce gli eventuali duplicati salvati con la chiave completa a 64 caratteri, aggiornando tutti i riferimenti
+- **Ricerca esatta** di nickname e aree, case-insensitive, senza wildcard `LIKE` (`%`, `_`)
+- **Ricerca per prefisso chiave**: minimo 8 caratteri; se il prefisso corrisponde a più utenti la richiesta viene rifiutata
+- **Anti-impersonificazione**: rifiutati i nickname che sembrano un prefisso esadecimale di chiave
+- **Nickname univoci** senza distinzione tra maiuscole e minuscole
+- I corpi dei PM non vengono più salvati nel log attività
+
+#### Pannello web leggero
+- Escaping HTML di tutti i dati mostrati (protezione XSS)
+- **Token CSRF** e controllo `Origin`/`Referer` su tutte le richieste che modificano dati; il logout ora è una `POST`
+- Session id casuali (`secrets`), cookie `HttpOnly` e `SameSite=Strict` (`Secure` su HTTPS), scadenza per inattività configurabile (`WEB_SESSION_TTL`, default 8 ore)
+- Confronto delle credenziali a tempo costante
+- **Password admin obbligatoria**: con `ADMIN_PASSWORD` non impostata o uguale a un valore predefinito/di esempio il login web è disabilitato e la pagina di login spiega come risolvere
+- `deploy/install.sh` genera una password admin casuale e la mostra una sola volta a fine installazione
+- Le chiamate `/api/*` senza sessione valida rispondono `401` JSON invece di un redirect
+- Header di sicurezza: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Cache-Control: no-store`
+
+### Modificato
+- **Fallback mock disattivato di default**: in produzione il BBS non passa più silenziosamente a una radio simulata; il mock si abilita solo con il nuovo flag `--mock` (solo sviluppo)
+- **Moderatori**: possono usare `!kick`, `!unkick`, `!mute`, `!unmute`, e `!delete` / `!board del` sui messaggi altrui
+- **`!help` riorganizzato**: comandi essenziali + categorie (`forum`, `posta`, `utili`, `giochi`, `mod`); `!help <categoria>`, `!help tutti`, `!help <comando>`
+- Il testo dei messaggi di canale viene loggato solo a livello `DEBUG`
+- Web server leggero multi-thread: una pagina lenta non blocca le altre
+- Cache dei nodi mesh nel pannello web (`WEB_NODES_CACHE_TTL`) e refresh contatti limitato (`WEB_CONTACTS_REFRESH`)
+- Pagina utenti paginata (50 per pagina)
+- `COOKIE_SECRET` non è più utilizzato (sessioni lato server)
+
+### Aggiunto
+- Flag launcher `--mock`
+- Variabili d'ambiente `WEB_SESSION_TTL`, `WEB_NODES_CACHE_TTL`, `WEB_CONTACTS_REFRESH`
+- `feedparser` aggiunto a `requirements.txt` e `requirements-light.txt`
+- Modulo `bbs/services/user_keys.py` (normalizzazione chiavi) e `bbs/commands/helpers.py` (parsing argomenti condiviso)
+- Nuovi test: sicurezza ricerca utenti, connessione radio, core, monitor ripetitori, chiavi utente, correzioni comandi, sicurezza pannello web
+
+### Note
+- Funzionalità presenti nel codice ma **non ancora attive** nel launcher leggero: client MQTT (non viene mai connesso), sistema plugin (`PluginManager` non istanziato), backup schedulati e classe `RetentionScheduler` (non avviati; la pulizia retention di PM e log resta attiva tramite il task giornaliero di `BBSCore`), cifratura SQLCipher (`BBS_DATABASE_KEY` letto ma non applicato), connessione BLE (non selezionabile dal launcher), tracciamento consegne (`delivery_status` non alimentato)
+
+---
+
 ## [1.4.0] - 2026-01-18
 
 ### Aggiunto

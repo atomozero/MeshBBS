@@ -99,9 +99,11 @@ Tipi comuni:
 ```
 meshbbs/
 ├── src/
-│   ├── bbs/           # Logica BBS core
-│   ├── meshcore/      # Comunicazione radio
-│   ├── web/           # API REST e WebSocket
+│   ├── launcher.py    # Launcher unificato (BBS + web leggero)
+│   ├── bbs/           # Logica BBS core, comandi, modelli, repository
+│   ├── meshbbs_radio/ # Comunicazione radio (meshcore_py)
+│   ├── web_light/     # Pannello admin leggero (bottle.py)
+│   ├── web/           # API REST FastAPI e WebSocket (legacy)
 │   └── utils/         # Utility condivise
 ├── tests/             # Test suite
 ├── web/               # Frontend React
@@ -128,7 +130,28 @@ pip install -r requirements.txt
 
 # Test
 pytest tests/ -v
+
+# Avvio senza hardware (radio simulata, SOLO sviluppo)
+cd src
+export ADMIN_PASSWORD='una-password-di-sviluppo'
+python launcher.py --mock --debug
 ```
+
+Senza `--mock` il BBS non usa mai la radio simulata: si avvia e ritenta la radio reale.
+Il login web richiede sempre `ADMIN_PASSWORD` impostata (nessuna password predefinita).
+
+### Convenzioni per i comandi BBS
+
+- I comandi usano il prefisso `!` (anche negli esempi, nei suggerimenti e in `usage`)
+- Le risposte viaggiano su LoRa in chunk da 140 byte: mantienile brevi
+- Per argomenti numerici usa `parse_int` di `bbs/commands/helpers.py` (rifiuta cifre Unicode e valori fuori scala)
+- Per cercare utenti e aree usa i repository (`UserRepository`, `AreaRepository`): la ricerca è esatta,
+  case-insensitive, senza wildcard `LIKE`; i prefissi di chiave richiedono almeno 8 caratteri
+- L'identità utente è la chiave canonica (prefisso di 12 caratteri esadecimali minuscoli, vedi
+  `bbs/services/user_keys.py`): non salvare chiavi complete a 64 caratteri come `public_key`
+- Aggiungi il comando a una categoria di `CATEGORIES` in `help_cmd.py`; per renderlo
+  utilizzabile dai moderatori imposta `moderator_allowed = True` accanto a `admin_only = True`
+- Ogni output HTML del pannello web deve passare per l'escaping, ogni POST richiede il token CSRF
 
 ### Frontend
 

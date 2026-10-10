@@ -2,6 +2,13 @@
 
 Guida allo sviluppo e utilizzo dei plugin per MeshBBS.
 
+> **Stato: sperimentale / non ancora attivo.** Il codice del sistema plugin
+> (`src/bbs/plugins/`) esiste, ma il launcher di produzione (`launcher.py`) non
+> istanzia mai `PluginManager`: i plugin nella directory `plugins/` **non vengono
+> caricati** e `plugins.json` non ha effetto. Anche gli endpoint `/api/v1/plugins`
+> appartengono alla API FastAPI legacy (`src/web/`), non al pannello web leggero.
+> Questa guida descrive l'API prevista per quando il sistema verrà collegato.
+
 ## Introduzione
 
 Il sistema plugin permette di estendere le funzionalità di MeshBBS senza modificare il codice core. I plugin possono:
@@ -42,7 +49,7 @@ class MyCommand(BaseCommand):
 
     name = "mycommand"
     description = "Il mio comando custom"
-    usage = "/mycommand [argomenti]"
+    usage = "!mycommand [argomenti]"
     aliases = ["mc"]
     admin_only = False
 
@@ -147,7 +154,7 @@ I comandi ereditano da `BaseCommand`:
 class WeatherCommand(BaseCommand):
     name = "weather"
     description = "Mostra meteo località"
-    usage = "/weather <città>"
+    usage = "!weather <città>"
     aliases = ["meteo", "w"]
     admin_only = False
     hidden = False  # True per nascondere da /help
@@ -157,7 +164,7 @@ class WeatherCommand(BaseCommand):
 
     async def execute(self, ctx: CommandContext, args: list) -> CommandResult:
         if not args:
-            return CommandResult.fail("Specifica una città: /weather Roma")
+            return CommandResult.fail("Specifica una città: !weather Roma")
 
         city = " ".join(args)
         # Logica per ottenere meteo...
@@ -241,7 +248,7 @@ class MyPlugin(BasePlugin):
 
 ## Gestione Plugin
 
-### Via API REST
+### Via API REST (solo API FastAPI legacy, non ancora attivo)
 
 ```bash
 # Lista plugin
@@ -375,11 +382,11 @@ class MyCommand(BaseCommand):
 
 ## Esempio Completo
 
-Vedi `/plugins/example_plugin.py` per un esempio funzionante con:
+Vedi `plugins/example_plugin.py` per un esempio funzionante con:
 
-- Comando `/ping` - Test responsività
-- Comando `/pluginup` - Uptime plugin
-- Comando `/echo` - Echo text
+- Comando `!ping` - Test responsività
+- Comando `!pluginup` - Uptime plugin
+- Comando `!echo` - Echo text
 - Hook messaggi
 - Hook nuovi utenti
 
