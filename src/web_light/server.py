@@ -308,7 +308,7 @@ td.wrap { white-space: normal; word-break: break-word; min-width: 120px; max-wid
 /* Login */
 .login-box { max-width: 320px; margin: 3rem auto; padding: 0 1rem; }
 .login-box h1 { text-align: center; margin-bottom: 1.5rem; }
-input[type=text], input[type=password] {
+input[type=text], input[type=password], select {
     width: 100%; padding: 0.6rem; margin-bottom: 0.75rem;
     background: #1e293b; border: 1px solid #475569; border-radius: 6px;
     color: #e2e8f0; font-size: 1rem;
@@ -1142,6 +1142,7 @@ def network_page():
     has_map = bool(geo_nodes) or (bbs_lat and bbs_lon)
 
     telemetry_html = _render_repeater_telemetry()
+    history_html = _render_node_history()
 
     map_html = ""
     if has_map:
@@ -1233,7 +1234,101 @@ def network_page():
         {rows if rows else '<tr><td colspan="5" style="text-align:center;color:#64748b">Nessun nodo visibile</td></tr>'}
         </table>
         </div></div>
+        {history_html}
     """, active="network")
+
+
+def _get_node_history(limit=50, days=7):
+    """Node history rows (most recent first) and nodes heard per day."""
+    from bbs.models.base import get_session
+    from bbs.services.node_history import NODE_TYPE_NAMES, nodes_per_day, recent_nodes
+
+    with get_session() as session:
+        nodes = [{
+            "name": n.name or "",
+            "key": n.pubkey_prefix,
+            "type": NODE_TYPE_NAMES.get(n.node_type, "?") if n.node_type is not None else "?",
+            "hops": n.last_hops,
+            "snr": n.snr,
+            "rssi": n.rssi,
+            "first_seen": n.first_seen,
+            "last_seen": n.last_seen,
+            "count": n.count or 0,
+        } for n in recent_nodes(session, limit=limit)]
+        per_day = nodes_per_day(session, days=days)
+    return nodes, per_day
+
+
+def _render_nodes_per_day_svg(per_day):
+    """Server-rendered SVG bar chart of distinct nodes heard per day."""
+    if not per_day:
+        return ""
+    width, height, top, bottom = 350, 120, 14, 18
+    bar_area = height - top - bottom
+    slot = width / len(per_day)
+    bar_w = slot * 0.6
+    max_val = max((c for _, c in per_day), default=0) or 1
+    parts = []
+    for i, (day, count) in enumerate(per_day):
+        h = int(round(count / max_val * bar_area)) if count else 0
+        x = i * slot + (slot - bar_w) / 2
+        y = top + bar_area - h
+        label = esc(day.strftime("%d/%m"))
+        parts.append(
+            f'<g><title>{label}: {int(count)} nodi</title>'
+            f'<rect x="{x:.1f}" y="{y:.1f}" width="{bar_w:.1f}" height="{max(h, 1)}" rx="2" fill="#3b82f6"></rect>'
+            f'<text x="{x + bar_w / 2:.1f}" y="{y - 3:.1f}" font-size="9" fill="#e2e8f0" text-anchor="middle">{int(count)}</text>'
+            f'<text x="{x + bar_w / 2:.1f}" y="{height - 4}" font-size="9" fill="#64748b" text-anchor="middle">{label}</text></g>'
+        )
+    return (
+        f'<svg viewBox="0 0 {width} {height}" width="100%" height="{height}" '
+        f'role="img" aria-label="Nodi sentiti per giorno">{"".join(parts)}</svg>'
+    )
+
+
+def _render_node_history():
+    """Node history section: 7-day chart + last seen / count / hops table."""
+    try:
+        nodes, per_day = _get_node_history()
+    except Exception:
+        logger.warning("Node history unavailable", exc_info=True)
+        return ""
+    if not nodes and not any(c for _, c in per_day):
+        return ""
+
+    from bbs.services.node_history import format_ago
+    now = datetime.utcnow()
+    rows = ""
+    for n in nodes:
+        hops = "-" if n["hops"] is None else f'{int(n["hops"])}h'
+        snr = "-" if n["snr"] is None else f'{float(n["snr"]):.1f}'
+        rssi = "-" if n["rssi"] is None else str(int(n["rssi"]))
+        last = n["last_seen"].strftime("%d/%m %H:%M") if n["last_seen"] else "-"
+        rows += f"""<tr>
+            <td>{esc(n['name'] or n['key'][:8])}</td>
+            <td>{esc(n['type'])}</td>
+            <td>{esc(hops)}</td>
+            <td>{esc(snr)} / {esc(rssi)}</td>
+            <td title="{esc(last)} UTC">{esc(format_ago(n['last_seen'], now))} fa</td>
+            <td>{int(n['count'])}</td>
+            <td><code>{esc(n['key'])}</code></td>
+        </tr>"""
+
+    return f"""
+    <div class="section">
+    <h2>Storico nodi <span style="font-size:0.75rem;color:#64748b;font-weight:normal">(ultimi 30 giorni)</span></h2>
+    <div class="card" style="padding:0.75rem">
+        <div style="font-size:0.8rem;color:#94a3b8;margin-bottom:0.25rem">Nodi sentiti per giorno (7 giorni)</div>
+        {_render_nodes_per_day_svg(per_day)}
+    </div>
+    <div class="card">
+    <table>
+    <tr><th>Nome</th><th>Tipo</th><th>Hop</th><th>SNR / RSSI</th><th>Ultimo</th><th>Volte</th><th>Chiave</th></tr>
+    {rows if rows else '<tr><td colspan="7" style="text-align:center;color:#64748b">Nessun nodo</td></tr>'}
+    </table>
+    </div>
+    </div>
+    """
 
 
 def _render_network_rows(nodes):
@@ -1402,6 +1497,9 @@ def logs_page():
 def settings_page():
     from utils.config import get_config
     cfg = get_config()
+    bulletin_on = bool(getattr(cfg, "bulletin_enabled", False))
+    bulletin_time = getattr(cfg, "bulletin_time", "08:00")
+    bulletin_channel = getattr(cfg, "bulletin_channel", 0)
 
     return page("Impostazioni", f"""
         <h1 style="margin:1rem 0">Impostazioni</h1>
@@ -1437,6 +1535,18 @@ def settings_page():
                 <input type="text" name="beacon_interval" value="{esc(cfg.beacon_interval)}" style="margin-bottom:0.5rem">
                 <label style="font-size:0.8rem;color:#94a3b8">Messaggio beacon</label>
                 <input type="text" name="beacon_message" value="{esc(cfg.beacon_message)}" style="margin-bottom:0.5rem">
+            </div>
+            <div class="card">
+                <h3>Bollettino giornaliero</h3>
+                <label style="font-size:0.8rem;color:#94a3b8">Bollettino sul canale (meteo + post di ieri)</label>
+                <select name="bulletin_enabled" style="margin-bottom:0.5rem">
+                    <option value="0"{'' if bulletin_on else ' selected'}>Disattivato</option>
+                    <option value="1"{' selected' if bulletin_on else ''}>Attivo</option>
+                </select>
+                <label style="font-size:0.8rem;color:#94a3b8">Orario (HH:MM, ora locale)</label>
+                <input type="text" name="bulletin_time" value="{esc(bulletin_time)}" placeholder="08:00" style="margin-bottom:0.5rem">
+                <label style="font-size:0.8rem;color:#94a3b8">Canale (0-7)</label>
+                <input type="text" name="bulletin_channel" value="{esc(bulletin_channel)}" style="margin-bottom:0.5rem">
             </div>
             <div class="card">
                 <h3>Retention</h3>
@@ -1508,7 +1618,7 @@ def settings_page():
             e.preventDefault();
             var form = document.getElementById('settings-form');
             var data = {{}};
-            var inputs = form.querySelectorAll('input');
+            var inputs = form.querySelectorAll('input, select');
             inputs.forEach(function(inp) {{
                 var v = inp.value.trim();
                 if (v !== '') data[inp.name] = v;
@@ -1560,6 +1670,24 @@ def api_save_settings():
                     updates[field] = int(data[field])
                 except ValueError:
                     pass
+
+        # Daily bulletin
+        if "bulletin_enabled" in data:
+            updates["bulletin_enabled"] = str(data["bulletin_enabled"]).lower() in ("1", "true", "on", "si")
+        if data.get("bulletin_time"):
+            from bbs.services.bulletin import parse_bulletin_time
+            at = parse_bulletin_time(data["bulletin_time"])
+            if at is None:
+                return json.dumps({"ok": False, "message": "Orario bollettino non valido (HH:MM)"})
+            updates["bulletin_time"] = at.strftime("%H:%M")
+        if str(data.get("bulletin_channel", "")).strip():
+            try:
+                channel = int(data["bulletin_channel"])
+            except (TypeError, ValueError):
+                channel = -1
+            if not 0 <= channel <= 7:
+                return json.dumps({"ok": False, "message": "Canale bollettino non valido (0-7)"})
+            updates["bulletin_channel"] = channel
 
         if updates:
             cfg.update(updates)
