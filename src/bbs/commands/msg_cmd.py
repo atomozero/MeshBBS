@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from .base import BaseCommand, CommandContext, CommandResult, CommandRegistry
 from bbs.repositories.private_message_repository import PrivateMessageRepository
 from bbs.repositories.user_repository import UserRepository
+from bbs.services.notifications import KIND_PM, notify_event
 
 # Store for ephemeral messages (in-memory only, not persisted)
 # Key: recipient_key, Value: list of (sender_key, sender_name, message, timestamp)
@@ -133,6 +134,11 @@ class MsgCommand(BaseCommand):
                 "[BBS] Errore nell'invio del messaggio"
             )
 
+        notify_event(
+            recipient.public_key, KIND_PM,
+            sender_key=ctx.sender_key, sender_name=sender.display_name,
+        )
+
         # Success
         recipient_name = recipient.display_name
         return CommandResult.ok(
@@ -232,6 +238,12 @@ class EphemeralMsgCommand(BaseCommand):
             sender_key=ctx.sender_key,
             sender_name=sender.display_name,
             message=message_text,
+        )
+
+        # The notice carries no text and no sender (ephemeral privacy)
+        notify_event(
+            recipient.public_key, KIND_PM,
+            sender_key=ctx.sender_key, ephemeral=True,
         )
 
         # Success

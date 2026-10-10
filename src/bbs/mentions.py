@@ -233,6 +233,12 @@ def process_mentions_in_message(
             message_body=message_body,
         )
 
+        from bbs.services.notifications import KIND_MENTION, notify_event
+        notify_event(
+            user.public_key, KIND_MENTION,
+            sender_key=sender_key, sender_name=sender_name, ref=message_id,
+        )
+
         notified.append(user.nickname or nickname)
         logger.info(f"Mention notification created for @{nickname}")
 

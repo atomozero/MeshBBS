@@ -18,6 +18,7 @@ from typing import List
 
 from sqlalchemy.orm import Session
 
+from bbs.services.notifications import KIND_MAIL, notify_event
 from .base import BaseCommand, CommandContext, CommandResult, CommandRegistry
 from bbs.models.user import User
 from bbs.models.private_message import PrivateMessage
@@ -106,6 +107,11 @@ class MailCommand(BaseCommand):
         )
         self.session.add(pm)
         self.session.commit()
+
+        notify_event(
+            recipient.public_key, KIND_MAIL,
+            sender_key=ctx.sender_key, sender_name=sender.display_name,
+        )
 
         return CommandResult.ok(
             f"[BBS] Mail inviata a {recipient.display_name}\n"

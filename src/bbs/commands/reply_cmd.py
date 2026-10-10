@@ -14,6 +14,7 @@ from .base import BaseCommand, CommandContext, CommandResult, CommandRegistry
 from bbs.repositories.message_repository import MessageRepository
 from bbs.repositories.user_repository import UserRepository
 from bbs.mentions import process_mentions_in_message
+from bbs.services.notifications import KIND_REPLY, notify_event
 from .helpers import parse_int, can_view_area
 
 
@@ -124,6 +125,13 @@ class ReplyCommand(BaseCommand):
             message_id=message.id,
             area_name=area_name,
         )
+
+        # Notify the author of the parent post (never themself)
+        if parent_message.sender_key and parent_message.sender_key != ctx.sender_key:
+            notify_event(
+                parent_message.sender_key, KIND_REPLY,
+                sender_key=ctx.sender_key, sender_name=sender_name, ref=message.id,
+            )
 
         # Format success response
         parent_author = (

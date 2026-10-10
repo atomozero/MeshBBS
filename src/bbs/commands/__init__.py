@@ -32,6 +32,7 @@ from . import (  # noqa: F401
     area_admin_cmd,
     utility_cmd,
     privacy_cmd,
+    notify_cmd,
 )
 
 __all__ = [

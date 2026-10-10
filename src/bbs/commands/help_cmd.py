@@ -28,7 +28,7 @@ CATEGORIES = {
     ],
     "utili": [
         "who", "whois", "nick", "staff", "stats", "info", "ping",
-        "news", "meteo", "gdpr", "mydata",
+        "news", "meteo", "notifiche", "gdpr", "mydata",
     ],
     "giochi": ["trivia", "fortune"],
     "mod": [

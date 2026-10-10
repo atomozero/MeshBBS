@@ -14,6 +14,9 @@ from bbs.models.activity_log import ActivityLog, EventType, log_activity
 from bbs.commands.dispatcher import CommandDispatcher
 from bbs.rate_limiter import RateLimiter
 from bbs.services.user_keys import canonical_user_key, normalize_user_keys
+from bbs.services import notifications as notify
+from bbs.services.bulletin import BulletinService
+from bbs.services.node_history import NodeHistory
 from meshbbs_radio.connection import BaseMeshCoreConnection, MeshCoreConnection, TCPMeshCoreConnection
 from meshbbs_radio.messages import Message
 from meshbbs_radio.state import get_state_manager
@@ -111,6 +114,12 @@ def split_utf8_chunks(text: str, max_bytes: int = MAX_CHUNK_BYTES) -> List[str]:
     return chunks
 
 
+def _resolve(future: Optional[asyncio.Future], value: bool) -> None:
+    """Set the result of a send future (if any and still pending)."""
+    if future is not None and not future.done():
+        future.set_result(value)
+
+
 class BBSCore:
     """
     Main BBS application core.
@@ -179,6 +188,11 @@ class BBSCore:
         self._send_queues: Dict[str, asyncio.Queue] = {}
         self._send_workers: Dict[str, asyncio.Task] = {}
         self.repeater_monitor = None
+        # Node history, DM notifications, daily bulletin
+        self.node_history = NodeHistory()
+        self.notifications: Optional[notify.NotificationService] = None
+        self.bulletin: Optional[BulletinService] = None
+        self._bulletin_task: Optional[asyncio.Task] = None
 
     def _connection_label(self) -> str:
         """Radio endpoint shown in the dashboard (host:port or serial port)."""
@@ -215,6 +229,15 @@ class BBSCore:
         self._link_lost_event = asyncio.Event()
         if hasattr(self.connection, "set_link_lost_callback"):
             self.connection.set_link_lost_callback(self._on_link_lost)
+        if hasattr(self.connection, "set_advert_callback"):
+            self.connection.set_advert_callback(self._on_advert)
+
+        # DM notifications (PM, mail, replies, mentions)
+        self.notifications = notify.NotificationService(
+            send=self._send_notification, prefix=self.config.response_prefix,
+        )
+        notify.set_notification_service(self.notifications)
+        self.notifications.start()
 
         # Connect to companion radio
         if self.config.connection_mode == "tcp":
@@ -254,6 +277,10 @@ class BBSCore:
 
         # Start periodic beacon broadcast
         self._beacon_task = asyncio.create_task(self._periodic_beacon())
+
+        # Daily channel bulletin (checks the settings at every tick)
+        self.bulletin = BulletinService(self.config, self._send_bulletin)
+        self._bulletin_task = asyncio.create_task(self.bulletin.run(lambda: self._running))
 
         # Start connection watchdog
         self._watchdog_task = asyncio.create_task(self._connection_watchdog())
@@ -319,8 +346,18 @@ class BBSCore:
             await self.repeater_monitor.stop()
 
         # Cancel background tasks (including pending reply senders)
+        if self.notifications is not None:
+            await self.notifications.stop()
+            if notify.get_notification_service() is self.notifications:
+                notify.set_notification_service(None)
+        try:
+            self.node_history.flush_all()
+        except Exception as e:
+            logger.debug(f"Node history flush failed: {e}")
+
         tasks = [self._advert_task, self._stats_task, self._ws_status_task,
-                 self._beacon_task, self._watchdog_task, self._retention_task]
+                 self._beacon_task, self._watchdog_task, self._retention_task,
+                 self._bulletin_task]
         tasks.extend(self._send_workers.values())
         for task in tasks:
             if task:
@@ -341,6 +378,8 @@ class BBSCore:
         # Disconnect
         if hasattr(self.connection, "set_link_lost_callback"):
             self.connection.set_link_lost_callback(None)
+        if hasattr(self.connection, "set_advert_callback"):
+            self.connection.set_advert_callback(None)
         await self.connection.disconnect()
         await self.state_manager.set_disconnected()
         logger.info("BBS stopped")
@@ -432,6 +471,10 @@ class BBSCore:
             logger.warning("Message without sender key ignored")
             return None
         message.sender_key = sender_key
+        self._note_heard(sender_key, message)
+
+        # Events left over by a failed dispatch are stale
+        notify.discard_events()
 
         # Create database session and dispatcher
         with get_session() as session:
@@ -455,7 +498,12 @@ class BBSCore:
             else:
                 logger.debug("No response (not a command)")
 
-            return response
+        # Committed: hand PM/reply/mention events to the notifier
+        events = notify.take_events()
+        if events and self.notifications is not None:
+            self.notifications.process_events(events)
+
+        return response
 
     async def _resolve_channel_sender(self, message: Message, sender_name: str) -> Optional[str]:
         """
@@ -500,7 +548,49 @@ class BBSCore:
         logger.info(f"Channel !bbs from {sender_name} -> resolved by {how} {key}")
         return key
 
-    def _queue_response(self, destination: str, text: str) -> None:
+    def _note_heard(self, sender_key: str, message: Message) -> None:
+        """A user wrote to us: update node history, wake waiting notices."""
+        try:
+            name = message.sender_name if message.is_channel else None
+            self.node_history.record(
+                sender_key, name=name, hops=message.hops,
+                snr=message.snr, rssi=message.rssi,
+            )
+        except Exception as e:
+            logger.debug(f"Node history update failed: {e}")
+        if self.notifications is not None:
+            self.notifications.on_heard(sender_key)
+
+    def _on_advert(self, info: dict) -> None:
+        """Advert heard by the companion (see connection.set_advert_callback)."""
+        key = info.get("public_key")
+        try:
+            self.node_history.record(
+                key, name=info.get("name"), node_type=info.get("type"),
+                hops=info.get("path_len"), lat=info.get("lat"), lon=info.get("lon"),
+            )
+        except Exception as e:
+            logger.debug(f"Node history update failed: {e}")
+        if self.notifications is not None:
+            self.notifications.on_heard(canonical_user_key(key))
+
+    async def _send_notification(self, destination: str, text: str) -> bool:
+        """Send a notice through the destination's reply queue; True if ACKed."""
+        if not self.connection.connected:
+            return False
+        done = asyncio.get_running_loop().create_future()
+        self._queue_response(destination, text, done=done)
+        return await done
+
+    async def _send_bulletin(self, channel_idx: int, text: str) -> bool:
+        sender = getattr(self.connection, "send_channel_message", None)
+        if sender is None or not self.connection.connected:
+            return False
+        return await sender(channel_idx, text)
+
+    def _queue_response(
+        self, destination: str, text: str, done: Optional[asyncio.Future] = None
+    ) -> None:
         """
         Queue a reply for background sending to one destination.
 
@@ -515,13 +605,15 @@ class BBSCore:
 
         if queue.full():
             try:
-                queue.get_nowait()
+                dropped = queue.get_nowait()
+                if isinstance(dropped, tuple):
+                    _resolve(dropped[1], False)
                 logger.warning(
                     f"Send queue for {destination[:8]} full: dropped oldest reply"
                 )
             except asyncio.QueueEmpty:
                 pass
-        queue.put_nowait(text)
+        queue.put_nowait((text, done) if done is not None else text)
 
         worker = self._send_workers.get(destination)
         if worker is None or worker.done():
@@ -534,15 +626,19 @@ class BBSCore:
         try:
             while True:
                 try:
-                    text = queue.get_nowait()
+                    item = queue.get_nowait()
                 except asyncio.QueueEmpty:
                     break
+                text, done = item if isinstance(item, tuple) else (item, None)
+                ok = False
                 try:
-                    await self._send_response(destination=destination, text=text)
+                    ok = await self._send_response(destination=destination, text=text)
                 except asyncio.CancelledError:
+                    _resolve(done, False)
                     raise
                 except Exception as e:
                     logger.error(f"Error sending reply to {destination[:8]}: {e}")
+                _resolve(done, bool(ok))
         finally:
             # No await between the empty check and this cleanup, so no
             # reply can be queued in between and get stranded.
@@ -811,6 +907,14 @@ class BBSCore:
                         pm_retention_days=self.config.pm_retention_days,
                         log_retention_days=self.config.activity_log_retention_days,
                     )
+
+                try:
+                    self.node_history.flush_all()
+                    nodes_deleted = self.node_history.purge()
+                    if nodes_deleted:
+                        logger.info(f"Retention cleanup: {nodes_deleted} nodi rimossi dallo storico")
+                except Exception as e:
+                    logger.error(f"Node history cleanup error: {e}")
 
                 if pms_deleted > 0 or logs_deleted > 0:
                     logger.info(

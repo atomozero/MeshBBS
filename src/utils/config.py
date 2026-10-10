@@ -39,6 +39,9 @@ UPDATABLE_FIELDS = {
     "stats_publish_interval",
     "beacon_interval",
     "beacon_message",
+    "bulletin_enabled",
+    "bulletin_time",
+    "bulletin_channel",
     "repeater_monitor_enabled",
     "repeater_monitor_interval_minutes",
     "repeater_monitor_targets",
@@ -92,6 +95,11 @@ class Config:
     # Beacon broadcast (0 = disabled)
     beacon_interval: int = 0  # minutes between beacon broadcasts (0=off)
     beacon_message: str = "{name} attivo! Scrivi !help per i comandi"
+
+    # Daily channel bulletin (weather + yesterday's posts), local time
+    bulletin_enabled: bool = False
+    bulletin_time: str = "08:00"
+    bulletin_channel: int = 0  # same channel as the beacon
 
     # Statistics publishing interval (MQTT)
     stats_publish_interval: int = 300  # seconds (5 minutes)
