@@ -10,7 +10,11 @@ from typing import List
 from sqlalchemy.orm import Session
 
 from .base import BaseCommand, CommandContext, CommandResult, CommandRegistry
-from bbs.repositories.user_repository import UserRepository
+from bbs.repositories.user_repository import (
+    UserRepository,
+    NicknameError,
+    is_reserved_nickname,
+)
 
 
 @CommandRegistry.register
@@ -69,15 +73,28 @@ class NickCommand(BaseCommand):
                 "[BBS] Nick non valido. Usa solo lettere, numeri, - e _"
             )
 
-        # Check if nickname is already taken
-        existing = self.user_repo.get_by_nickname(nickname)
-        if existing and existing.public_key != ctx.sender_key:
+        # Reject nicks that look like a public key prefix (hex-only, 6+
+        # chars): users without nick are shown as public_key[:8], so such a
+        # nick could impersonate them.
+        if is_reserved_nickname(nickname):
+            return CommandResult.fail(
+                "[BBS] Nick non valido: non puo sembrare una chiave "
+                "pubblica (solo cifre esadecimali)"
+            )
+
+        # Check if nickname is already taken (case-insensitive)
+        if self.user_repo.is_nickname_taken(
+            nickname, exclude_public_key=ctx.sender_key
+        ):
             return CommandResult.fail(
                 f"[BBS] Nick '{nickname}' gia in uso"
             )
 
-        # Set nickname
-        user = self.user_repo.set_nickname(ctx.sender_key, nickname)
+        # Set nickname (repository re-checks uniqueness)
+        try:
+            user = self.user_repo.set_nickname(ctx.sender_key, nickname)
+        except NicknameError as e:
+            return CommandResult.fail(f"[BBS] {e}")
 
         if user:
             return CommandResult.ok(f"[BBS] Nick impostato: {nickname}")

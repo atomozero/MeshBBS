@@ -7,6 +7,7 @@ MIT License - Copyright (c) 2026 MeshBBS Contributors
 from datetime import datetime
 from typing import Optional, List
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from .base_repository import BaseRepository
@@ -44,7 +45,7 @@ class MessageRepository(BaseRepository[Message]):
         return (
             self.session.query(Message)
             .join(Area)
-            .filter(Area.name.ilike(area_name))
+            .filter(func.lower(Area.name) == area_name.lower())
             .options(joinedload(Message.author))
             .order_by(Message.timestamp.desc())
             .offset(offset)
@@ -98,7 +99,7 @@ class MessageRepository(BaseRepository[Message]):
         # Get area
         area = (
             self.session.query(Area)
-            .filter(Area.name.ilike(area_name))
+            .filter(func.lower(Area.name) == area_name.lower())
             .first()
         )
 
@@ -191,11 +192,11 @@ class MessageRepository(BaseRepository[Message]):
             List of matching messages
         """
         q = self.session.query(Message).filter(
-            Message.body.ilike(f"%{query}%")
+            Message.body.icontains(query, autoescape=True)
         )
 
         if area_name:
-            q = q.join(Area).filter(Area.name.ilike(area_name))
+            q = q.join(Area).filter(func.lower(Area.name) == area_name.lower())
 
         return (
             q.options(joinedload(Message.author))
@@ -217,6 +218,6 @@ class MessageRepository(BaseRepository[Message]):
         return (
             self.session.query(Message)
             .join(Area)
-            .filter(Area.name.ilike(area_name))
+            .filter(func.lower(Area.name) == area_name.lower())
             .count()
         )

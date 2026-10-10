@@ -6,6 +6,7 @@ MIT License - Copyright (c) 2026 MeshBBS Contributors
 
 from typing import Optional, List
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .base_repository import BaseRepository
@@ -23,7 +24,10 @@ class AreaRepository(BaseRepository[Area]):
 
     def get_by_name(self, name: str) -> Optional[Area]:
         """
-        Get area by name (case-insensitive).
+        Get area by name (exact match, case-insensitive).
+
+        Uses equality on lower(name), not LIKE: '%' and '_' in the input
+        are matched literally (e.g. 'gen%' must not match 'generale').
 
         Args:
             name: Area name
@@ -31,9 +35,11 @@ class AreaRepository(BaseRepository[Area]):
         Returns:
             Area or None if not found
         """
+        if not name:
+            return None
         return (
             self.session.query(Area)
-            .filter(Area.name.ilike(name))
+            .filter(func.lower(Area.name) == name.lower())
             .first()
         )
 

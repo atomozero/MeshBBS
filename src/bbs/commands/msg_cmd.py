@@ -2,7 +2,7 @@
 Private message command for MeshCore BBS.
 
 Send private messages to other users.
-Supports ephemeral (non-saved) messages with /msg! command.
+Supports ephemeral (non-saved) messages with !msg! command.
 
 MIT License - Copyright (c) 2026 MeshBBS Contributors
 """
@@ -101,7 +101,9 @@ class MsgCommand(BaseCommand):
             )
 
         # Find recipient
-        recipient = self._find_recipient(recipient_identifier)
+        recipient, lookup_error = self._find_recipient(recipient_identifier)
+        if lookup_error:
+            return CommandResult.fail(lookup_error)
         if not recipient:
             return CommandResult.fail(
                 f"[BBS] Utente '{recipient_identifier}' non trovato"
@@ -139,41 +141,16 @@ class MsgCommand(BaseCommand):
 
     def _find_recipient(self, identifier: str):
         """
-        Find a user by nickname or public key.
+        Find a user by nickname or public key prefix.
 
         Args:
-            identifier: Nickname or public key prefix (min 8 chars)
+            identifier: Nickname (exact, case-insensitive) or public key
+                prefix (min 8 hex chars, must be unambiguous)
 
         Returns:
-            User or None
+            (User or None, error message or None)
         """
-        # First try by nickname (exact match, case insensitive)
-        user = self.user_repo.get_by_nickname(identifier)
-        if user:
-            return user
-
-        # Then try by public key prefix (minimum 8 characters)
-        if len(identifier) >= 8:
-            # Search by public key prefix
-            from bbs.models.user import User
-            user = (
-                self.session.query(User)
-                .filter(User.public_key.startswith(identifier.upper()))
-                .first()
-            )
-            if user:
-                return user
-
-            # Also try lowercase
-            user = (
-                self.session.query(User)
-                .filter(User.public_key.startswith(identifier.lower()))
-                .first()
-            )
-            if user:
-                return user
-
-        return None
+        return self.user_repo.resolve_user(identifier)
 
 
 @CommandRegistry.register
@@ -229,7 +206,9 @@ class EphemeralMsgCommand(BaseCommand):
             )
 
         # Find recipient
-        recipient = self._find_recipient(recipient_identifier)
+        recipient, lookup_error = self._find_recipient(recipient_identifier)
+        if lookup_error:
+            return CommandResult.fail(lookup_error)
         if not recipient:
             return CommandResult.fail(
                 f"[BBS] Utente '{recipient_identifier}' non trovato"
@@ -262,27 +241,5 @@ class EphemeralMsgCommand(BaseCommand):
         )
 
     def _find_recipient(self, identifier: str):
-        """Find a user by nickname or public key."""
-        user = self.user_repo.get_by_nickname(identifier)
-        if user:
-            return user
-
-        if len(identifier) >= 8:
-            from bbs.models.user import User
-            user = (
-                self.session.query(User)
-                .filter(User.public_key.startswith(identifier.upper()))
-                .first()
-            )
-            if user:
-                return user
-
-            user = (
-                self.session.query(User)
-                .filter(User.public_key.startswith(identifier.lower()))
-                .first()
-            )
-            if user:
-                return user
-
-        return None
+        """Find a user by nickname or public key prefix."""
+        return self.user_repo.resolve_user(identifier)

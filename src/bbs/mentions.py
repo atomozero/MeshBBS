@@ -15,9 +15,17 @@ from collections import defaultdict
 
 logger = logging.getLogger("meshbbs.mentions")
 
-# Regex to detect @mentions
-# Matches @nickname where nickname is 2-20 alphanumeric chars
-MENTION_PATTERN = re.compile(r"@([a-zA-Z][a-zA-Z0-9_]{1,19})\b")
+# Command prefix used by the BBS (see bbs.commands.parser.parse_command)
+COMMAND_PREFIX = "!"
+
+# Regex to detect @mentions.
+# Charset and length are aligned with NickCommand (letters, digits, '_' and
+# '-', 2-16 chars). The '@' must not follow a nick character (so e-mail
+# addresses like test@example.com are ignored) and the nick must not be
+# followed by another nick character (no partial matches of longer words).
+MENTION_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9_-])@([A-Za-z0-9_-]{2,16})(?![A-Za-z0-9_-])"
+)
 
 
 @dataclass
@@ -201,7 +209,7 @@ def process_mentions_in_message(
     notified = []
 
     for nickname in mentioned_nicknames:
-        # Find user by nickname
+        # Find user by nickname (exact, case-insensitive; no LIKE wildcards)
         user = user_repo.get_by_nickname(nickname)
 
         if user is None:
@@ -248,7 +256,7 @@ def format_mentions_for_inbox(mentions: List[Mention]) -> str:
 
     for m in mentions:
         lines.append(f"@{m.sender_name} in #{m.area_name}: \"{m.excerpt}\"")
-        lines.append(f"  -> /read {m.message_id}")
+        lines.append(f"  -> {COMMAND_PREFIX}read {m.message_id}")
 
     lines.append("(Le menzioni scompaiono dopo la lettura)")
 

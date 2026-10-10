@@ -4,14 +4,51 @@ User repository for data access operations.
 MIT License - Copyright (c) 2026 MeshBBS Contributors
 """
 
+import re
 from datetime import datetime, timedelta
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .base_repository import BaseRepository
 from bbs.models.user import User
 from bbs.models.activity_log import ActivityLog, EventType
+
+
+# Minimum length of a public key prefix accepted as a user identifier
+MIN_KEY_PREFIX_LENGTH = 8
+
+# Identifiers made only of hex digits (real MeshCore keys are hex)
+HEX_PATTERN = re.compile(r"^[0-9A-Fa-f]+$")
+
+# Characters accepted in a key prefix lookup. Real keys are hex; plain
+# alphanumerics are tolerated (legacy/test keys) but never LIKE wildcards.
+KEY_PREFIX_PATTERN = re.compile(r"^[0-9A-Za-z]+$")
+
+# Nicknames that look like a key prefix (hex-only, 6+ chars) are reserved:
+# users without nickname are displayed as public_key[:8], so such a nick
+# could be used to impersonate them.
+RESERVED_HEX_NICK_PATTERN = re.compile(r"^[0-9A-Fa-f]{6,}$")
+
+AMBIGUOUS_PREFIX_MESSAGE = (
+    "[BBS] Prefisso chiave ambiguo: corrisponde a piu utenti. "
+    "Usa un prefisso piu lungo"
+)
+
+
+class NicknameError(ValueError):
+    """Raised when a nickname cannot be assigned (reserved or taken)."""
+
+
+def is_hex_identifier(identifier: str) -> bool:
+    """Return True if identifier contains only hexadecimal digits."""
+    return bool(identifier) and bool(HEX_PATTERN.match(identifier))
+
+
+def is_reserved_nickname(nickname: str) -> bool:
+    """Return True if nickname looks like a public key prefix."""
+    return bool(RESERVED_HEX_NICK_PATTERN.match(nickname or ""))
 
 
 class UserRepository(BaseRepository[User]):
@@ -69,23 +106,64 @@ class UserRepository(BaseRepository[User]):
 
     def get_by_nickname(self, nickname: str) -> Optional[User]:
         """
-        Get user by nickname.
+        Get user by nickname (exact match, case-insensitive).
+
+        No LIKE pattern is involved, so '_' and '%' in the nickname are
+        matched literally.
 
         Args:
             nickname: The nickname to search for
 
         Returns:
-            User or None if not found
+            User or None if not found (or if the match is ambiguous)
         """
-        return (
+        if not nickname:
+            return None
+        matches = (
             self.session.query(User)
-            .filter(User.nickname.ilike(nickname))
-            .first()
+            .filter(func.lower(User.nickname) == nickname.lower())
+            .order_by(User.id)
+            .limit(5)
+            .all()
         )
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            # Legacy duplicates differing only in case: accept only an
+            # exact-case match, never guess.
+            exact = [u for u in matches if u.nickname == nickname]
+            if len(exact) == 1:
+                return exact[0]
+        return None
+
+    def is_nickname_taken(
+        self, nickname: str, exclude_public_key: Optional[str] = None
+    ) -> bool:
+        """
+        Check whether a nickname is already used (case-insensitive).
+
+        Args:
+            nickname: Nickname to check
+            exclude_public_key: Ignore this user (e.g. the one renaming)
+
+        Returns:
+            True if another user already owns the nickname
+        """
+        q = self.session.query(User.id).filter(
+            func.lower(User.nickname) == nickname.lower()
+        )
+        if exclude_public_key is not None:
+            q = q.filter(User.public_key != exclude_public_key)
+        return q.first() is not None
 
     def set_nickname(self, public_key: str, nickname: str) -> Optional[User]:
         """
         Set nickname for a user.
+
+        Case-insensitive uniqueness is enforced here in code.
+        NOTE: there is no DB-level unique index on lower(nickname) yet; it
+        requires a migration (planned separately), so concurrent writers
+        could still race. All nickname writes must go through this method.
 
         Args:
             public_key: The user's public key
@@ -93,7 +171,18 @@ class UserRepository(BaseRepository[User]):
 
         Returns:
             Updated user or None if not found
+
+        Raises:
+            NicknameError: if the nickname is reserved or already taken
         """
+        if nickname is not None:
+            if is_reserved_nickname(nickname):
+                raise NicknameError(
+                    "Nick non valido: non puo sembrare una chiave pubblica"
+                )
+            if self.is_nickname_taken(nickname, exclude_public_key=public_key):
+                raise NicknameError(f"Nick '{nickname}' gia in uso")
+
         user = self.get_by_public_key(public_key)
         if user:
             old_nickname = user.nickname
@@ -227,30 +316,97 @@ class UserRepository(BaseRepository[User]):
             )
         return user
 
+    def find_by_key_prefix(self, prefix: str) -> List[User]:
+        """
+        Find users whose public key starts with a hex prefix.
+
+        The prefix must be alphanumeric (real keys are hex) and at least
+        MIN_KEY_PREFIX_LENGTH chars; matching is case-insensitive and LIKE
+        wildcards are escaped (autoescape) in any case.
+
+        Args:
+            prefix: Public key prefix
+
+        Returns:
+            Up to 2 matching users (enough to detect ambiguity)
+        """
+        if len(prefix) < MIN_KEY_PREFIX_LENGTH or not KEY_PREFIX_PATTERN.match(
+            prefix
+        ):
+            return []
+        return (
+            self.session.query(User)
+            .filter(
+                func.lower(User.public_key).startswith(
+                    prefix.lower(), autoescape=True
+                )
+            )
+            .order_by(User.id)
+            .limit(2)
+            .all()
+        )
+
+    def resolve_user(self, identifier: str) -> Tuple[Optional[User], Optional[str]]:
+        """
+        Resolve a user identifier (nickname or public key prefix).
+
+        Hex identifiers that match a key prefix are resolved as keys first
+        (defense against nicknames impersonating a key prefix). A prefix
+        matching more than one user is refused as ambiguous.
+
+        Args:
+            identifier: Nickname or public key prefix (min 8 hex chars)
+
+        Returns:
+            (user, None) on success, (None, error_message) if ambiguous,
+            (None, None) if not found
+        """
+        identifier = (identifier or "").strip()
+        if not identifier:
+            return None, None
+
+        # Hex identifiers: key prefix wins over nickname (defense in depth
+        # against nicknames that mimic a key prefix).
+        if is_hex_identifier(identifier):
+            user, error = self._resolve_key_prefix(identifier)
+            if user or error:
+                return user, error
+
+        user = self.get_by_nickname(identifier)
+        if user:
+            return user, None
+
+        if not is_hex_identifier(identifier):
+            return self._resolve_key_prefix(identifier)
+
+        return None, None
+
+    def _resolve_key_prefix(
+        self, prefix: str
+    ) -> Tuple[Optional[User], Optional[str]]:
+        """Resolve a key prefix, refusing ambiguous matches."""
+        matches = self.find_by_key_prefix(prefix)
+        if len(matches) == 1:
+            return matches[0], None
+        if len(matches) > 1:
+            return None, AMBIGUOUS_PREFIX_MESSAGE
+        return None, None
+
     def find_user(self, identifier: str) -> Optional[User]:
         """
         Find a user by nickname or public key prefix.
+
+        Ambiguous key prefixes return None (never an arbitrary match).
+        Use resolve_user() to get the reason.
 
         Args:
             identifier: Nickname or public key prefix (min 8 chars)
 
         Returns:
-            User or None if not found
+            User or None if not found / ambiguous
         """
-        # Try nickname first
-        user = self.get_by_nickname(identifier)
-        if user:
-            return user
-
-        # Try public key prefix (min 8 chars)
-        if len(identifier) >= 8:
-            return (
-                self.session.query(User)
-                .filter(User.public_key.startswith(identifier))
-                .first()
-            )
-
-        return None
+        user, _ = self.resolve_user(identifier)
+        return user
 
     def promote_to_moderator(self, public_key: str) -> Optional[User]:
         """

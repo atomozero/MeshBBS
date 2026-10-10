@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from .base import BaseCommand, CommandContext, CommandResult, CommandRegistry
 from bbs.repositories.private_message_repository import PrivateMessageRepository
+from bbs.repositories.user_repository import is_reserved_nickname
 
 
 @CommandRegistry.register
@@ -90,6 +91,21 @@ class ReadPmCommand(BaseCommand):
         # Add reply hint if user is recipient
         if message.recipient_key == ctx.sender_key:
             lines.append("")
-            lines.append(f"Rispondi: !msg {other_name} <testo>")
+            lines.append(f"Rispondi: !msg {self._reply_target(message)} <testo>")
 
         return CommandResult.ok("\n".join(lines))
+
+    @staticmethod
+    def _reply_target(message) -> str:
+        """
+        Identifier that !msg resolves back to the original sender.
+
+        Uses the nickname when set (exact lookup), otherwise a 16-char key
+        prefix (8 chars could be ambiguous). Legacy hex-looking nicknames are
+        not used, since !msg resolves hex identifiers as key prefixes first.
+        """
+        sender = message.sender
+        nickname = sender.nickname if sender else None
+        if nickname and not is_reserved_nickname(nickname):
+            return nickname
+        return message.sender_key[:16]
