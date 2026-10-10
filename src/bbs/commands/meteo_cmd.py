@@ -160,7 +160,9 @@ class MeteoCommand(BaseCommand):
             lon = cfg.longitude
             name = "Qui"
 
-            if not lat or not lon:
+            # 0.0 is a valid coordinate (equator / Greenwich): only None
+            # means "not configured"
+            if lat is None or lon is None:
                 return CommandResult.fail(
                     "[BBS] Posizione BBS non configurata.\nUsa: !meteo <citta>"
                 )

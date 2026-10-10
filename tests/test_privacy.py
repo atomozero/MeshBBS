@@ -355,7 +355,7 @@ class TestGdprCommand:
     @pytest.mark.asyncio
     async def test_privacy_alias(self, dispatcher, sender_key, user):
         """Test /privacy alias."""
-        response = await dispatcher.dispatch("/privacy", sender_key)
+        response = await dispatcher.dispatch("!privacy", sender_key)
 
         assert "GDPR" in response
 

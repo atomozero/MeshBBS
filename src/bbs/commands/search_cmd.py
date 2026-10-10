@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from .base import BaseCommand, CommandContext, CommandResult, CommandRegistry
 from bbs.repositories.message_repository import MessageRepository
 from bbs.repositories.area_repository import AreaRepository
+from .helpers import parse_int, can_view_area
 
 
 @CommandRegistry.register
@@ -40,9 +41,9 @@ class SearchCommand(BaseCommand):
         Execute the search command.
 
         Supports:
-        - /search <term> - search all areas
-        - /search #area <term> - search in specific area
-        - /search <term> <n> - search with custom limit
+        - !search <term> - search all areas
+        - !search #area <term> - search in specific area
+        - !search <term> <n> - search with custom limit
 
         Args:
             ctx: Command context
@@ -75,17 +76,27 @@ class SearchCommand(BaseCommand):
         # Validate area if specified
         if area_name:
             area = self.area_repo.get_by_name(area_name)
-            if not area:
+            # Hidden areas are invisible to non-admins
+            if not area or not can_view_area(area, ctx):
                 return CommandResult.fail(
                     f"[BBS] Area '{area_name}' non trovata"
                 )
 
         # Search messages
+        # Fetch extra rows so that filtering out hidden areas (non-admins)
+        # still leaves up to `limit` results.
+        fetch_limit = limit if ctx.is_admin else limit * 4
         messages = self.message_repo.search_messages(
             query=query,
             area_name=area_name,
-            limit=limit,
+            limit=fetch_limit,
         )
+        if not ctx.is_admin:
+            messages = [
+                m for m in messages
+                if m.area is None or can_view_area(m.area, ctx)
+            ]
+        messages = messages[:limit]
 
         if not messages:
             if area_name:
@@ -133,13 +144,9 @@ class SearchCommand(BaseCommand):
             # Check for #area
             if arg.startswith("#") and len(arg) > 1 and not area_name:
                 area_name = arg[1:].lower()
-            # Check for numeric limit at end
-            elif arg.isdigit() and not query_parts:
-                # If first arg is a number, it's part of query
-                query_parts.append(arg)
-            elif arg.isdigit() and query_parts:
-                # Number after query is limit
-                limit = min(int(arg), self.MAX_LIMIT)
+            # Number after query is limit (a leading number is query text)
+            elif query_parts and parse_int(arg) is not None:
+                limit = max(1, min(parse_int(arg), self.MAX_LIMIT))
             else:
                 query_parts.append(arg)
 

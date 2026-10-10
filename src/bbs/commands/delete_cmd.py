@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from .base import BaseCommand, CommandContext, CommandResult, CommandRegistry
 from bbs.models.message import Message
+from .helpers import parse_int
 
 
 @CommandRegistry.register
@@ -19,7 +20,7 @@ class DeleteCommand(BaseCommand):
     """Delete own public message."""
 
     name = "delete"
-    description = "Elimina un tuo messaggio pubblico"
+    description = "Elimina un tuo messaggio pubblico (staff: qualsiasi)"
     usage = "!delete <id>"
     aliases = ["del"]
 
@@ -29,20 +30,23 @@ class DeleteCommand(BaseCommand):
     async def execute(
         self, ctx: CommandContext, args: List[str]
     ) -> CommandResult:
-        if not args or not args[0].isdigit():
+        msg_id = parse_int(args[0], strip_hash=True) if args else None
+        if msg_id is None:
             return CommandResult.fail("[BBS] Uso: !delete <id>")
 
-        msg_id = int(args[0])
         msg = self.session.query(Message).filter_by(id=msg_id).first()
 
         if not msg:
             return CommandResult.fail(f"[BBS] Messaggio #{msg_id} non trovato")
 
-        # Only author or admin can delete
-        if msg.sender_key != ctx.sender_key and not ctx.is_admin:
-            return CommandResult.fail("[BBS] Solo l'autore o un admin puo eliminare")
+        # Only author, moderator or admin can delete
+        if msg.sender_key != ctx.sender_key and not (ctx.is_admin or ctx.is_moderator):
+            return CommandResult.fail("[BBS] Solo l'autore o lo staff puo eliminare")
 
+        area = msg.area
         self.session.delete(msg)
+        if area is not None:
+            area.decrement_message_count()
         self.session.commit()
 
         return CommandResult.ok(f"[BBS] Messaggio #{msg_id} eliminato")

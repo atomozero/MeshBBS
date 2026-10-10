@@ -207,9 +207,9 @@ class PrivacyInfo:
             "[BBS] Informativa Privacy:\n"
             "- I messaggi pubblici sono visibili a tutti\n"
             "- I PM sono salvati sul server\n"
-            "- Usa /msg! per PM non salvati\n"
+            "- Usa !msg! per PM non salvati\n"
             "- I dati vengono eliminati periodicamente\n"
-            "- Usa /gdpr per info complete"
+            "- Usa !gdpr per info complete"
         )
 
     @staticmethod
@@ -238,6 +238,6 @@ class PrivacyInfo:
             f"  Retention PM: {pm_policy}\n"
             f"  Retention Log: {log_policy}\n"
             f"  Crittografia DB: {encryption}\n"
-            "  Diritti: /delpm per eliminare PM\n"
-            "  PM effimeri: /msg! (non salvati)"
+            "  Diritti: !delpm per eliminare PM\n"
+            "  PM effimeri: !msg! (non salvati)"
         )

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from .base import BaseCommand, CommandContext, CommandResult, CommandRegistry
 from bbs.repositories.user_repository import UserRepository
+from .helpers import parse_int
 
 
 @CommandRegistry.register
@@ -150,6 +151,7 @@ class MuteCommand(BaseCommand):
     usage = "!mute <utente> [motivo]"
     aliases = ["silence"]
     admin_only = True
+    moderator_allowed = True  # moderators may use it too
 
     def __init__(self, session: Session):
         self.session = session
@@ -194,6 +196,10 @@ class MuteCommand(BaseCommand):
         if target.is_admin:
             return CommandResult.fail("[BBS] Non puoi silenziare un admin")
 
+        # Moderators cannot act on other staff members
+        if target.is_moderator and not ctx.is_admin:
+            return CommandResult.fail("[BBS] Non puoi silenziare un moderatore")
+
         # Check if banned (banned users don't need mute)
         if target.is_banned:
             return CommandResult.fail(
@@ -225,6 +231,7 @@ class UnmuteCommand(BaseCommand):
     usage = "!unmute <utente>"
     aliases = ["unsilence"]
     admin_only = True
+    moderator_allowed = True  # moderators may use it too
 
     def __init__(self, session: Session):
         self.session = session
@@ -493,6 +500,7 @@ class KickCommand(BaseCommand):
     usage = "!kick <utente> <minuti> [motivo]"
     aliases = []
     admin_only = True
+    moderator_allowed = True  # moderators may use it too
 
     DEFAULT_MINUTES = 30
     MAX_MINUTES = 1440  # 24 hours
@@ -527,8 +535,14 @@ class KickCommand(BaseCommand):
         minutes = self.DEFAULT_MINUTES
         reason_start = 1
 
-        if len(args) > 1 and args[1].isdigit():
-            minutes = min(int(args[1]), self.MAX_MINUTES)
+        parsed_minutes = parse_int(args[1]) if len(args) > 1 else None
+        if parsed_minutes is not None:
+            if parsed_minutes < 1:
+                return CommandResult.fail(
+                    "[BBS] Durata non valida (min 1 minuto)\n"
+                    "Uso: !kick <utente> [minuti] [motivo]"
+                )
+            minutes = min(parsed_minutes, self.MAX_MINUTES)
             reason_start = 2
 
         reason = " ".join(args[reason_start:]) if len(args) > reason_start else None
@@ -548,6 +562,10 @@ class KickCommand(BaseCommand):
         # Cannot kick admins
         if target.is_admin:
             return CommandResult.fail("[BBS] Non puoi espellere un admin")
+
+        # Moderators cannot act on other staff members
+        if target.is_moderator and not ctx.is_admin:
+            return CommandResult.fail("[BBS] Non puoi espellere un moderatore")
 
         # Check if already banned
         if target.is_banned:
@@ -581,6 +599,7 @@ class UnkickCommand(BaseCommand):
     usage = "!unkick <utente>"
     aliases = []
     admin_only = True
+    moderator_allowed = True  # moderators may use it too
 
     def __init__(self, session: Session):
         self.session = session

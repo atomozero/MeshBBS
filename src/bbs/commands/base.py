@@ -7,7 +7,10 @@ MIT License - Copyright (c) 2026 MeshBBS Contributors
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, List, Dict, Type
+from typing import Optional, List, Dict, Tuple, Type
+
+# Package holding the built-in command modules (e.g. "bbs.commands")
+_BUILTIN_PACKAGE = __name__.rsplit(".", 1)[0]
 
 
 @dataclass
@@ -101,6 +104,11 @@ class CommandRegistry:
 
     _commands: Dict[str, Type[BaseCommand]] = {}
     _aliases: Dict[str, str] = {}  # alias -> command name
+    # Every built-in command class (defined in the bbs.commands package) ever
+    # registered. Not affected by clear(), so built-ins can be restored after
+    # a clear() even though their modules are already imported (registration
+    # happens at import time and would not run again).
+    _builtins: List[Type[BaseCommand]] = []
 
     @classmethod
     def register(cls, command_class: Type[BaseCommand]) -> Type[BaseCommand]:
@@ -120,6 +128,12 @@ class CommandRegistry:
         """
         name = command_class.name.lower()
         cls._commands[name] = command_class
+
+        if (
+            command_class.__module__.startswith(_BUILTIN_PACKAGE + ".")
+            and command_class not in cls._builtins
+        ):
+            cls._builtins.append(command_class)
 
         # Register aliases
         for alias in command_class.aliases:
@@ -164,6 +178,57 @@ class CommandRegistry:
     def get_command_names(cls) -> List[str]:
         """Get all command names."""
         return list(cls._commands.keys())
+
+    @classmethod
+    def unregister(cls, command_class: Type[BaseCommand]) -> bool:
+        """
+        Remove a command class (and its aliases) from the registry.
+
+        Only removes the entry if it currently maps to this exact class, so
+        unregistering a plugin command never removes a different command
+        registered under the same name.
+
+        Returns:
+            True if the command was removed
+        """
+        name = command_class.name.lower()
+        if cls._commands.get(name) is not command_class:
+            return False
+        del cls._commands[name]
+        for alias, target in list(cls._aliases.items()):
+            if target == name:
+                del cls._aliases[alias]
+        return True
+
+    @classmethod
+    def ensure_builtins(cls) -> None:
+        """
+        Re-register built-in commands that are missing from the registry
+        (e.g. after clear()). Commands already registered under the same
+        name (such as plugin overrides) are left untouched.
+        """
+        for command_class in list(cls._builtins):
+            name = command_class.name.lower()
+            if name not in cls._commands:
+                cls._commands[name] = command_class
+            for alias in command_class.aliases:
+                cls._aliases.setdefault(alias.lower(), name)
+
+    @classmethod
+    def snapshot(cls) -> Tuple[Dict[str, Type[BaseCommand]], Dict[str, str]]:
+        """Return a copy of the registry state (for testing)."""
+        return dict(cls._commands), dict(cls._aliases)
+
+    @classmethod
+    def restore(
+        cls, state: Tuple[Dict[str, Type[BaseCommand]], Dict[str, str]]
+    ) -> None:
+        """Restore a registry state previously returned by snapshot()."""
+        commands, aliases = state
+        cls._commands.clear()
+        cls._commands.update(commands)
+        cls._aliases.clear()
+        cls._aliases.update(aliases)
 
     @classmethod
     def clear(cls) -> None:

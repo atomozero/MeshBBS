@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from .base import BaseCommand, CommandContext, CommandResult, CommandRegistry
 from bbs.repositories.private_message_repository import PrivateMessageRepository
+from . import msg_cmd
 from .msg_cmd import get_ephemeral_messages
 from bbs.mentions import get_mention_notifier, format_mentions_for_inbox
 
@@ -23,10 +24,16 @@ class InboxCommand(BaseCommand):
     name = "inbox"
     description = "Mostra messaggi privati ricevuti"
     usage = "!inbox [n]"
-    aliases = ["mail", "pms"]
+    # NB: no "mail" alias: !mail is the MailCommand (send a mail)
+    aliases = ["pms"]
 
     DEFAULT_LIMIT = 4
     MAX_LIMIT = 6
+    # Ephemeral PMs are shown in full (they disappear after reading), so
+    # only a few per !inbox; the others stay queued for the next !inbox.
+    MAX_EPHEMERAL_SHOWN = 3
+    # Defensive bound per ephemeral message (!msg! already limits to 200)
+    MAX_EPHEMERAL_LEN = 200
 
     def __init__(self, session: Session):
         self.session = session
@@ -62,6 +69,14 @@ class InboxCommand(BaseCommand):
 
         # Get and consume ephemeral messages (they disappear after reading)
         ephemeral = get_ephemeral_messages(ctx.sender_key)
+        ephemeral_left = 0
+        if len(ephemeral) > self.MAX_EPHEMERAL_SHOWN:
+            remaining = ephemeral[self.MAX_EPHEMERAL_SHOWN:]
+            ephemeral = ephemeral[:self.MAX_EPHEMERAL_SHOWN]
+            ephemeral_left = len(remaining)
+            # Put back the ones not shown, before any newly arrived ones
+            queue = msg_cmd._ephemeral_messages.setdefault(ctx.sender_key, [])
+            queue[:0] = remaining
 
         # Get and consume mentions (they disappear after reading)
         notifier = get_mention_notifier()
@@ -90,8 +105,12 @@ class InboxCommand(BaseCommand):
             lines.append(f"[BBS] PM effimeri ({len(ephemeral)}) - spariscono dopo lettura:")
             for eph in ephemeral:
                 sender = eph["sender_name"]
-                msg_preview = eph["message"][:30] + "..." if len(eph["message"]) > 30 else eph["message"]
-                lines.append(f"  !{sender}: {msg_preview}")
+                text = eph["message"]
+                if len(text) > self.MAX_EPHEMERAL_LEN:
+                    text = text[:self.MAX_EPHEMERAL_LEN - 3] + "..."
+                lines.append(f"  {sender}: {text}")
+            if ephemeral_left:
+                lines.append(f"  (+{ephemeral_left} effimeri: ripeti !inbox)")
             lines.append("")
 
         # Show persistent messages

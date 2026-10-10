@@ -42,6 +42,10 @@ class Area(Base):
         "Message",
         back_populates="area",
         lazy="dynamic",
+        # Deleting an area deletes its messages (and their replies, which
+        # live in the same area). Without this the ORM would try to set
+        # messages.area_id = NULL -> IntegrityError (NOT NULL).
+        cascade="all, delete-orphan",
         order_by="Message.timestamp.desc()",
     )
 
@@ -68,3 +72,7 @@ class Area(Base):
     def can_post(self) -> bool:
         """Check if posting is allowed in this area."""
         return self.is_public and not self.is_readonly
+
+    def decrement_message_count(self, n: int = 1) -> None:
+        """Decrement the message counter (never below zero)."""
+        self.message_count = max(0, (self.message_count or 0) - n)

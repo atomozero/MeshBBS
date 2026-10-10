@@ -170,6 +170,29 @@ def _get_score(sender_key: str) -> Dict[str, int]:
     return _scores[sender_key]
 
 
+def _get_question(q_idx: int) -> Tuple[str, str, Dict[str, str], str]:
+    """
+    Return question q_idx with its options shuffled deterministically.
+
+    The question bank has most correct answers on "B": the correct
+    option is moved to letter (q_idx mod n), the others keep their
+    relative order. Deterministic, so resend/answer always agree, and
+    the correct letter is evenly spread over A/B/C.
+
+    Returns:
+        (category, question, options_dict, correct_letter)
+    """
+    cat, question, options, correct = QUESTIONS[q_idx]
+    letters = sorted(options)
+    correct_value = options[correct]
+    others = [options[k] for k in letters if k != correct]
+    target = letters[q_idx % len(letters)]
+    shuffled = {}
+    for letter in letters:
+        shuffled[letter] = correct_value if letter == target else others.pop(0)
+    return cat, question, shuffled, target
+
+
 @CommandRegistry.register
 class TriviaCommand(BaseCommand):
     """Trivia quiz game."""
@@ -215,7 +238,7 @@ class TriviaCommand(BaseCommand):
             if time.time() - ts < QUESTION_TIMEOUT:
                 # Resend the active question
                 q_idx, correct, _ = _active_questions[ctx.sender_key]
-                cat, question, options, _ = QUESTIONS[q_idx]
+                cat, question, options, _ = _get_question(q_idx)
                 opts = " ".join(f"{k}){v}" for k, v in options.items())
                 return CommandResult.ok(
                     f"[BBS] [{cat}]\n{question}\n{opts}\nRispondi: !trivia A/B/C"
@@ -223,7 +246,7 @@ class TriviaCommand(BaseCommand):
 
         # Pick random question
         q_idx = random.randint(0, len(QUESTIONS) - 1)
-        cat, question, options, correct = QUESTIONS[q_idx]
+        cat, question, options, correct = _get_question(q_idx)
 
         # Store active question
         _active_questions[ctx.sender_key] = (q_idx, correct, time.time())
@@ -250,7 +273,7 @@ class TriviaCommand(BaseCommand):
             )
 
         # Get question details
-        cat, question, options, _ = QUESTIONS[q_idx]
+        cat, question, options, _ = _get_question(q_idx)
         score = _get_score(ctx.sender_key)
         score["total"] += 1
 

@@ -6,13 +6,18 @@ Fetches and displays news from RSS feeds.
 MIT License - Copyright (c) 2026 MeshBBS Contributors
 """
 
+import asyncio
+import html
 import logging
+import re
+import urllib.request
 from time import time
 from typing import List
 
 from sqlalchemy.orm import Session
 
 from .base import BaseCommand, CommandContext, CommandResult, CommandRegistry
+from .helpers import parse_int
 
 try:
     import feedparser
@@ -31,6 +36,20 @@ RSS_FEEDS = {
 DEFAULT_FEED = "ansa"
 NEWS_COUNT = 5
 NEWS_CACHE_TTL = 300  # 5 minuti
+HTTP_TIMEOUT = 5      # secondi per il download del feed
+FETCH_TIMEOUT = 8     # secondi totali (download + parsing) lato event loop
+MAX_FEED_BYTES = 2 * 1024 * 1024
+MAX_SUMMARY_LEN = 400  # bound per !news <n> (radio budget)
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _clean_summary(text: str) -> str:
+    """Strip HTML tags/entities and bound the length."""
+    text = html.unescape(_TAG_RE.sub("", text or ""))
+    text = " ".join(text.split())
+    if len(text) > MAX_SUMMARY_LEN:
+        text = text[:MAX_SUMMARY_LEN - 3] + "..."
+    return text
 
 # Cache: feed_name -> (timestamp, [(title, summary), ...])
 _cache = {}
@@ -38,6 +57,17 @@ _cache = {}
 # Ultimo feed consultato per utente (max 100 entries)
 _user_last_feed = {}
 _USER_FEED_MAX = 100
+
+
+async def _fetch_news_async(feed_name: str) -> list:
+    """Fetch news off the event loop, bounded by FETCH_TIMEOUT."""
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_fetch_news, feed_name), timeout=FETCH_TIMEOUT
+        )
+    except asyncio.TimeoutError:
+        logger.warning(f"Timeout fetch RSS {feed_name}")
+        return []
 
 
 def _fetch_news(feed_name: str) -> list:
@@ -53,9 +83,13 @@ def _fetch_news(feed_name: str) -> list:
         return []
 
     try:
-        feed = feedparser.parse(url)
+        # Download with an explicit timeout: feedparser.parse(url) has none
+        req = urllib.request.Request(url, headers={"User-Agent": "MeshBBS/1.0"})
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as resp:
+            raw = resp.read(MAX_FEED_BYTES)
+        feed = feedparser.parse(raw)
         entries = [
-            (entry.title.strip(), entry.get("summary", "").strip())
+            (entry.get("title", "").strip(), _clean_summary(entry.get("summary", "")))
             for entry in feed.entries[:NEWS_COUNT]
         ]
         _cache[feed_name] = (now, entries)
@@ -87,7 +121,7 @@ class NewsCommand(BaseCommand):
             )
 
         if not args:
-            return self._headlines(ctx.sender_key, DEFAULT_FEED)
+            return await self._headlines(ctx.sender_key, DEFAULT_FEED)
 
         arg = args[0].lower()
 
@@ -100,20 +134,21 @@ class NewsCommand(BaseCommand):
             return CommandResult.ok("\n".join(lines))
 
         # !news <numero> — detail of a specific news item
-        if arg.isdigit():
-            return self._detail(ctx.sender_key, int(arg))
+        index = parse_int(arg)
+        if index is not None:
+            return await self._detail(ctx.sender_key, index)
 
         # !news <feed_name> — headlines from a specific feed
         if arg in RSS_FEEDS:
-            return self._headlines(ctx.sender_key, arg)
+            return await self._headlines(ctx.sender_key, arg)
 
         return CommandResult.fail(
             f"[BBS] Feed '{arg}' non trovato.\n!news list per i feed disponibili"
         )
 
-    def _headlines(self, sender_key: str, feed_name: str) -> CommandResult:
+    async def _headlines(self, sender_key: str, feed_name: str) -> CommandResult:
         """Fetch and format headlines."""
-        entries = _fetch_news(feed_name)
+        entries = await _fetch_news_async(feed_name)
         if not entries:
             return CommandResult.fail("[BBS] Notizie non disponibili")
 
@@ -131,10 +166,10 @@ class NewsCommand(BaseCommand):
 
         return CommandResult.ok("\n".join(lines))
 
-    def _detail(self, sender_key: str, index: int) -> CommandResult:
+    async def _detail(self, sender_key: str, index: int) -> CommandResult:
         """Get full detail for a specific news item (no title, full summary)."""
         feed_name = _user_last_feed.get(sender_key, DEFAULT_FEED)
-        entries = _fetch_news(feed_name)
+        entries = await _fetch_news_async(feed_name)
 
         if not entries:
             return CommandResult.fail("[BBS] Notizie non disponibili")

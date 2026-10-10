@@ -4,6 +4,7 @@ Command dispatcher for MeshCore BBS.
 MIT License - Copyright (c) 2026 MeshBBS Contributors
 """
 
+import importlib
 from datetime import datetime
 from typing import Optional
 
@@ -20,6 +21,16 @@ try:
 except ImportError:
     import logging
     logger = logging.getLogger("meshbbs.commands")
+
+
+# Commands whose arguments contain private text (PM/mail bodies). Only the
+# command name and the first argument (target nickname or message id) are
+# written to the activity log, never the body.
+PRIVATE_COMMANDS = frozenset({
+    "msg", "msg!", "mail", "readmail", "delmail", "readpm", "delpm", "reply",
+})
+# Commands that deliver ephemeral (non-saved) PMs
+EPHEMERAL_COMMANDS = frozenset({"msg!"})
 
 
 class CommandDispatcher:
@@ -53,12 +64,14 @@ class CommandDispatcher:
 
     def _register_default_commands(self) -> None:
         """Register all default commands."""
-        # Import here to avoid circular imports
-        from . import help_cmd, post_cmd, list_cmd, read_cmd, areas_cmd, nick_cmd, who_cmd
-        from . import msg_cmd, inbox_cmd, readpm_cmd, reply_cmd, search_cmd, admin_cmd
-        from . import area_admin_cmd, utility_cmd, privacy_cmd
+        # Import here to avoid circular imports. Importing the package runs
+        # every command module, whose @CommandRegistry.register decorators
+        # register the built-in commands on first import.
+        importlib.import_module(__package__)
 
-        # Commands are auto-registered via decorator
+        # Modules are imported only once: if the registry was cleared after
+        # import (tests, plugin reloads), re-register the built-ins.
+        CommandRegistry.ensure_builtins()
 
     async def dispatch(
         self,
@@ -114,16 +127,17 @@ class CommandDispatcher:
                 logger.warning(f"Kicked user attempted command: {sender_key[:8]}")
             return self._format_response("Accesso negato")
 
-        # Check rate limiting
-        if self.rate_limiter:
-            # Admins bypass rate limiting
-            if user.is_admin:
-                self.rate_limiter.add_to_whitelist(sender_key)
-
+        # Check rate limiting. Admin status is checked on every call (no
+        # sticky whitelist: a demoted admin must be limited again).
+        rate_limited = self.rate_limiter is not None and not user.is_admin
+        if rate_limited:
             allowed, error_msg = self.rate_limiter.check(sender_key)
             if not allowed:
                 logger.warning(f"Rate limited: {sender_key[:8]} - {error_msg}")
                 return self._format_response(error_msg)
+            # Record every attempt (failing, unknown or denied commands too),
+            # otherwise a flood of invalid commands is never throttled.
+            self.rate_limiter.record(sender_key)
 
         # Create context
         ctx = CommandContext(
@@ -146,13 +160,17 @@ class CommandDispatcher:
                 f"Comando '!{parsed.command}' sconosciuto. Usa !help"
             )
 
-        # Check admin permission
+        # Check admin/moderator permission
         command = command_class(self.session)
-        if command.admin_only and not user.is_admin:
+        if command.admin_only and not self._has_permission(command, user):
             logger.warning(
                 f"Non-admin {sender_key[:8]} attempted admin command: !{parsed.command}"
             )
             return self._format_response("Permesso negato")
+
+        # Ephemeral PMs can be disabled by config (allow_ephemeral_pm)
+        if command.name in EPHEMERAL_COMMANDS and not self._ephemeral_allowed():
+            return self._format_response("PM effimeri disabilitati su questo BBS")
 
         # Execute command
         try:
@@ -161,10 +179,6 @@ class CommandDispatcher:
             )
             result = await command.execute(ctx, parsed.args)
 
-            # Record command execution for rate limiting
-            if self.rate_limiter and result.success:
-                self.rate_limiter.record(sender_key)
-
             if result.success:
                 logger.debug(f"Command successful: {result.response[:50]}...")
             else:
@@ -172,10 +186,7 @@ class CommandDispatcher:
 
             try:
                 from bbs.models.activity_log import EventType, log_activity
-                args_str = " ".join(parsed.args) if parsed.args else ""
-                details = f"!{parsed.command}"
-                if args_str:
-                    details += f" {args_str[:80]}"
+                details = self._log_details(command.name, parsed.command, parsed.args)
                 if not result.success:
                     details += " [fail]"
                 log_activity(
@@ -194,7 +205,44 @@ class CommandDispatcher:
 
         except Exception as e:
             logger.exception(f"Error executing !{parsed.command}: {e}")
+            try:
+                self.session.rollback()
+            except Exception:
+                logger.exception("Rollback failed")
             return self._format_response("Errore interno")
+
+    @staticmethod
+    def _has_permission(command, user) -> bool:
+        """Admin-only commands: admins always, moderators if allowed."""
+        if user.is_admin:
+            return True
+        return bool(getattr(command, "moderator_allowed", False) and user.is_moderator)
+
+    @staticmethod
+    def _ephemeral_allowed() -> bool:
+        try:
+            from utils.config import get_config
+            return bool(getattr(get_config(), "allow_ephemeral_pm", True))
+        except Exception:
+            return True
+
+    @staticmethod
+    def _log_details(canonical: str, invoked: str, args) -> str:
+        """
+        Build the activity-log line for a command.
+
+        Arguments of private commands (PM/mail bodies) are never logged;
+        for those only the command name and the target are recorded.
+        """
+        details = f"!{invoked}"
+        if canonical in PRIVATE_COMMANDS:
+            if args:
+                details += f" {args[0][:32]}"
+            return details
+        args_str = " ".join(args) if args else ""
+        if args_str:
+            details += f" {args_str[:80]}"
+        return details
 
     def _format_response(self, message: str) -> str:
         """Format a response with the BBS prefix."""

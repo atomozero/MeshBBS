@@ -8,5 +8,8 @@ SQLAlchemy>=2.0.0
 # MeshCore radio communication
 meshcore>=0.1.0
 
+# RSS feeds for !news (pure Python, Pi-friendly)
+feedparser>=6.0.0
+
 # MQTT integration (optional, comment out if not needed)
 # paho-mqtt>=2.0.0

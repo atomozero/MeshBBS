@@ -22,6 +22,13 @@ from .base import BaseCommand, CommandContext, CommandResult, CommandRegistry
 from bbs.models.user import User
 from bbs.models.private_message import PrivateMessage
 from bbs.repositories.user_repository import UserRepository
+from .helpers import parse_int
+
+# Same limit as !msg (MsgCommand.MAX_MESSAGE_LENGTH)
+MAX_MAIL_LENGTH = 200
+MAX_SUBJECT_LENGTH = 40
+# Bound for !readmail output (body is truncated beyond this)
+MAX_READ_BODY = 300
 
 
 @CommandRegistry.register
@@ -44,14 +51,24 @@ class MailCommand(BaseCommand):
                 "[BBS] Uso: !mail <utente> <oggetto> | <corpo>"
             )
 
-        # Find recipient
+        # Sender must be allowed to write (not muted/banned/kicked)
+        sender, _ = self.user_repo.get_or_create(ctx.sender_key)
+        if not sender.can_post():
+            return CommandResult.fail("[BBS] Non puoi inviare messaggi")
+
+        # Find recipient (nickname or public key prefix)
         recipient_name = args[0]
-        recipient = self.user_repo.find_by_nickname(recipient_name)
+        recipient = self.user_repo.find_user(recipient_name)
         if not recipient:
             return CommandResult.fail(f"[BBS] Utente '{recipient_name}' non trovato")
 
         if recipient.public_key == ctx.sender_key:
             return CommandResult.fail("[BBS] Non puoi inviare mail a te stesso")
+
+        if recipient.is_banned:
+            return CommandResult.fail(
+                "[BBS] Impossibile inviare mail a questo utente"
+            )
 
         # Parse subject and body (separated by |)
         rest = " ".join(args[1:])
@@ -60,11 +77,24 @@ class MailCommand(BaseCommand):
             subject = subject.strip()
             body = body.strip()
         else:
-            subject = rest
+            subject = rest.strip()
             body = ""
 
         if not subject:
             return CommandResult.fail("[BBS] Oggetto mancante")
+
+        # ']' would break the [MAIL:subject] storage format
+        subject = subject.replace("]", ")")
+
+        if len(subject) > MAX_SUBJECT_LENGTH:
+            return CommandResult.fail(
+                f"[BBS] Oggetto troppo lungo (max {MAX_SUBJECT_LENGTH} char)"
+            )
+
+        if len(subject) + len(body) > MAX_MAIL_LENGTH:
+            return CommandResult.fail(
+                f"[BBS] Mail troppo lunga (max {MAX_MAIL_LENGTH} char)"
+            )
 
         # Store as PM with subject in body (format: [MAIL:subject]\nbody)
         mail_body = f"[MAIL:{subject}]\n{body}" if body else f"[MAIL:{subject}]"
@@ -77,7 +107,6 @@ class MailCommand(BaseCommand):
         self.session.add(pm)
         self.session.commit()
 
-        sender_name = ctx.sender_display
         return CommandResult.ok(
             f"[BBS] Mail inviata a {recipient.display_name}\n"
             f"  Oggetto: {subject}"
@@ -145,10 +174,10 @@ class ReadMailCommand(BaseCommand):
     async def execute(
         self, ctx: CommandContext, args: List[str]
     ) -> CommandResult:
-        if not args or not args[0].isdigit():
+        pm_id = parse_int(args[0], strip_hash=True) if args else None
+        if pm_id is None:
             return CommandResult.fail("[BBS] Uso: !readmail <id>")
 
-        pm_id = int(args[0])
         pm = self.session.query(PrivateMessage).filter_by(id=pm_id).first()
 
         if not pm:
@@ -171,10 +200,13 @@ class ReadMailCommand(BaseCommand):
 
         lines = [f"[BBS] Mail #{pm.id}"]
         lines.append(f"Da: {sender_name} ({age})")
-        lines.append(f"Oggetto: {subject}")
+        lines.append(f"Oggetto: {subject[:MAX_SUBJECT_LENGTH + 20]}")
         if body:
+            if len(body) > MAX_READ_BODY:
+                body = body[:MAX_READ_BODY - 3] + "..."
             lines.append(body)
-        lines.append(f"Rispondi: !mail {sender_name} Re:{subject} | <testo>")
+        if pm.recipient_key == ctx.sender_key:
+            lines.append(f"Rispondi: !mail {sender_name} Re:{subject[:30]} | <testo>")
 
         return CommandResult.ok("\n".join(lines))
 
@@ -193,10 +225,10 @@ class DelMailCommand(BaseCommand):
     async def execute(
         self, ctx: CommandContext, args: List[str]
     ) -> CommandResult:
-        if not args or not args[0].isdigit():
+        pm_id = parse_int(args[0], strip_hash=True) if args else None
+        if pm_id is None:
             return CommandResult.fail("[BBS] Uso: !delmail <id>")
 
-        pm_id = int(args[0])
         pm = self.session.query(PrivateMessage).filter_by(id=pm_id).first()
 
         if not pm:

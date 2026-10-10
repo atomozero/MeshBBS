@@ -338,7 +338,7 @@ class TestMuteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/silence Loud", admin_sender_key)
+        response = await dispatcher.dispatch("!silence Loud", admin_sender_key)
 
         assert response is not None
         assert "silenziato" in response.lower()
@@ -414,7 +414,7 @@ class TestUnmuteCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/unsilence Quiet", admin_sender_key)
+        response = await dispatcher.dispatch("!unsilence Quiet", admin_sender_key)
 
         assert response is not None
         assert "può nuovamente scrivere" in response.lower()

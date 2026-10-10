@@ -222,7 +222,7 @@ class TestSearchCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/find alias", test_sender_key)
+        response = await dispatcher.dispatch("!find alias", test_sender_key)
 
         assert response is not None
         assert "risultat" in response.lower()
@@ -242,7 +242,7 @@ class TestSearchCommand:
         db_session.commit()
 
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/s short", test_sender_key)
+        response = await dispatcher.dispatch("!s short", test_sender_key)
 
         assert response is not None
         assert "risultat" in response.lower()

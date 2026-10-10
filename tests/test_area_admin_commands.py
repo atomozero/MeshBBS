@@ -167,7 +167,7 @@ class TestNewAreaCommand:
     ):
         """Test /createarea alias."""
         dispatcher = CommandDispatcher(session=db_session)
-        response = await dispatcher.dispatch("/createarea alias_test", admin_sender_key)
+        response = await dispatcher.dispatch("!createarea alias_test", admin_sender_key)
 
         assert response is not None
         assert "creata" in response.lower()

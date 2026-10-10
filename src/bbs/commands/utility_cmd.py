@@ -16,6 +16,7 @@ from .base import BaseCommand, CommandContext, CommandResult, CommandRegistry
 from bbs.repositories.private_message_repository import PrivateMessageRepository
 from bbs.repositories.user_repository import UserRepository
 from bbs.repositories.area_repository import AreaRepository
+from .helpers import parse_int
 from bbs.models.user import User
 from bbs.models.message import Message
 from bbs.models.private_message import PrivateMessage
@@ -56,9 +57,8 @@ class DelPmCommand(BaseCommand):
             )
 
         # Parse message ID
-        try:
-            msg_id = int(args[0].lstrip("#"))
-        except ValueError:
+        msg_id = parse_int(args[0], strip_hash=True)
+        if msg_id is None:
             return CommandResult.fail("[BBS] ID non valido")
 
         # Get message

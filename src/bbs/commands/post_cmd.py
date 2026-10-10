@@ -14,6 +14,7 @@ from bbs.repositories.user_repository import UserRepository
 from bbs.repositories.area_repository import AreaRepository
 from bbs.mentions import process_mentions_in_message
 from utils.config import get_config
+from .helpers import can_view_area
 
 
 @CommandRegistry.register
@@ -39,9 +40,9 @@ class PostCommand(BaseCommand):
         Execute the post command.
 
         Supports two formats:
-        - /post <messaggio> - posts to default area
-        - /post #area <messaggio> - posts to specified area
-        - /post area <messaggio> - posts to specified area (if area exists)
+        - !post <messaggio> - posts to default area
+        - !post #area <messaggio> - posts to specified area
+        - !post area <messaggio> - posts to specified area (if area exists)
         """
         # Check for message content
         if not args:
@@ -69,14 +70,17 @@ class PostCommand(BaseCommand):
 
         # Verify area exists and is writable
         area = self.area_repo.get_by_name(area_name)
-        if not area:
+        # Hidden areas are invisible to non-admins: same answer as "not found"
+        if not area or not can_view_area(area, ctx):
             available = [a.name for a in self.area_repo.get_writable_areas()]
             return CommandResult.fail(
                 f"[BBS] Area '{area_name}' non trovata\n"
                 f"Aree disponibili: {', '.join(available)}"
             )
 
-        if area.is_readonly:
+        area_name = area.name
+        writable = (not area.is_readonly) if ctx.is_admin else area.can_post()
+        if not writable:
             return CommandResult.fail(
                 f"[BBS] Area '{area_name}' è in sola lettura"
             )

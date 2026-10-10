@@ -206,7 +206,7 @@ class TestPostMultiArea:
         dispatcher = CommandDispatcher(session=db_session)
 
         # Test /p
-        response = await dispatcher.dispatch("/p #tech Short post", test_sender_key)
+        response = await dispatcher.dispatch("!p #tech Short post", test_sender_key)
         assert "pubblicato" in response.lower()
 
         # Clean up for next test
@@ -214,7 +214,7 @@ class TestPostMultiArea:
         db_session.commit()
 
         # Test /say
-        response = await dispatcher.dispatch("/say #tech Say something", test_sender_key)
+        response = await dispatcher.dispatch("!say #tech Say something", test_sender_key)
         assert "pubblicato" in response.lower()
 
 

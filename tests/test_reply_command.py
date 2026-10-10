@@ -200,7 +200,7 @@ class TestReplyCommand:
 
         dispatcher = CommandDispatcher(session=db_session)
         response = await dispatcher.dispatch(
-            f"/re {original_msg.id} Short reply", test_sender_key
+            f"!re {original_msg.id} Short reply", test_sender_key
         )
 
         assert response is not None

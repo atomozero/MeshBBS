@@ -23,6 +23,7 @@ from .base import BaseCommand, CommandContext, CommandResult, CommandRegistry
 from bbs.models.message import Message
 from bbs.models.area import Area
 from bbs.models.user import User
+from .helpers import parse_int
 
 BOARD_AREA_NAME = "bacheca"
 
@@ -61,20 +62,21 @@ class BoardCommand(BaseCommand):
             return self._list_posts()
 
         subcmd = args[0].lower()
+        post_id = parse_int(args[1], strip_hash=True) if len(args) > 1 else None
 
         if subcmd == "post" and len(args) > 1:
             return self._create_post(ctx, " ".join(args[1:]))
-        elif subcmd == "read" and len(args) > 1 and args[1].isdigit():
-            return self._read_post(ctx, int(args[1]))
-        elif subcmd == "del" and len(args) > 1 and args[1].isdigit():
-            return self._delete_post(ctx, int(args[1]))
+        elif subcmd == "read" and post_id is not None:
+            return self._read_post(ctx, post_id)
+        elif subcmd == "del" and post_id is not None:
+            return self._delete_post(ctx, post_id)
         else:
             return CommandResult.fail(
                 "[BBS] Uso:\n"
                 "  !board - ultimi annunci\n"
                 "  !board post <testo>\n"
                 "  !board read <id>\n"
-                "  !board del <id> (admin)"
+                "  !board del <id> (autore/staff)"
             )
 
     def _list_posts(self) -> CommandResult:
@@ -107,7 +109,17 @@ class BoardCommand(BaseCommand):
         if len(text) > 500:
             return CommandResult.fail("[BBS] Post troppo lungo (max 500 caratteri)")
 
+        # Same rules as !post: muted/kicked/banned users can't write
+        user = self.session.query(User).filter_by(public_key=ctx.sender_key).first()
+        if user is None or not user.can_post():
+            return CommandResult.fail("[BBS] Non puoi pubblicare messaggi")
+
         area = _ensure_board_area(self.session)
+
+        # The board area may be made read-only (or hidden) by an admin
+        writable = (not area.is_readonly) if ctx.is_admin else area.can_post()
+        if not writable:
+            return CommandResult.fail("[BBS] Bacheca in sola lettura")
 
         post = Message(
             area_id=area.id,
@@ -156,11 +168,12 @@ class BoardCommand(BaseCommand):
         if not post:
             return CommandResult.fail(f"[BBS] Annuncio #{post_id} non trovato")
 
-        # Only admin or author can delete
-        if post.sender_key != ctx.sender_key and not ctx.is_admin:
-            return CommandResult.fail("[BBS] Solo l'autore o un admin puo eliminare")
+        # Only author, moderator or admin can delete
+        if post.sender_key != ctx.sender_key and not (ctx.is_admin or ctx.is_moderator):
+            return CommandResult.fail("[BBS] Solo l'autore o lo staff puo eliminare")
 
         self.session.delete(post)
+        area.decrement_message_count()
         self.session.commit()
 
         return CommandResult.ok(f"[BBS] Annuncio #{post_id} eliminato")

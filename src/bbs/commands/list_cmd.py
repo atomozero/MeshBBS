@@ -9,7 +9,9 @@ from typing import List
 from sqlalchemy.orm import Session
 
 from .base import BaseCommand, CommandContext, CommandResult, CommandRegistry
+from bbs.repositories.area_repository import AreaRepository
 from bbs.repositories.message_repository import MessageRepository
+from .helpers import parse_int, can_view_area
 from utils.config import get_config
 
 
@@ -29,6 +31,7 @@ class ListCommand(BaseCommand):
         self.session = session
         self.config = get_config()
         self.message_repo = MessageRepository(session)
+        self.area_repo = AreaRepository(session)
 
     async def execute(
         self, ctx: CommandContext, args: List[str]
@@ -41,11 +44,15 @@ class ListCommand(BaseCommand):
         limit = min(self.config.messages_per_page, self.MAX_LIMIT)
 
         if args:
-            try:
-                limit = int(args[0])
-                limit = max(1, min(limit, self.MAX_LIMIT))
-            except ValueError:
+            requested = parse_int(args[0])
+            if requested is None:
                 return CommandResult.fail("[BBS] Uso: !list [n]")
+            limit = max(1, min(requested, self.MAX_LIMIT))
+
+        # A hidden default area (is_public=False) is listable only by admins
+        area = self.area_repo.get_by_name(self.config.default_area)
+        if area is not None and not can_view_area(area, ctx):
+            return CommandResult.ok("[BBS] Nessun messaggio")
 
         messages = self.message_repo.get_recent_messages(
             area_name=self.config.default_area,

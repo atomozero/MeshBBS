@@ -113,6 +113,17 @@ class DelAreaCommand(BaseCommand):
         self.session = session
         self.area_repo = AreaRepository(session)
 
+    def _protected_names(self) -> set:
+        names = {n.lower() for n in self.PROTECTED_AREAS}
+        try:
+            from utils.config import get_config
+            default_area = getattr(get_config(), "default_area", None)
+            if default_area:
+                names.add(default_area.lower())
+        except Exception:
+            pass
+        return names
+
     async def execute(
         self, ctx: CommandContext, args: List[str]
     ) -> CommandResult:
@@ -142,17 +153,21 @@ class DelAreaCommand(BaseCommand):
                 f"[BBS] Area '{area_name}' non trovata"
             )
 
-        # Check if protected
-        if area_name.lower() in self.PROTECTED_AREAS:
+        # Check if protected: compare the resolved area's real name (not
+        # the user input) against protected names and the configured
+        # default area.
+        real_name = area.name
+        area_name = real_name
+        if real_name.lower() in self._protected_names():
             return CommandResult.fail(
-                f"[BBS] L'area '{area_name}' è protetta e non può essere eliminata"
+                f"[BBS] L'area '{real_name}' è protetta e non può essere eliminata"
             )
 
         # Get message count for warning
         msg_count = area.message_count
 
-        # Delete area
-        self.area_repo.delete_area(area_name, deleted_by=ctx.sender_key)
+        # Delete area (messages are removed by the ORM cascade)
+        self.area_repo.delete_area(real_name, deleted_by=ctx.sender_key)
         self.session.commit()
 
         if msg_count > 0:

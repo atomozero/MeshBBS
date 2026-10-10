@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from .base import BaseCommand, CommandContext, CommandResult, CommandRegistry
 from bbs.repositories.message_repository import MessageRepository
+from .helpers import parse_int, can_view_area
 
 
 @CommandRegistry.register
@@ -42,15 +43,17 @@ class ReadCommand(BaseCommand):
             )
 
         # Parse message ID
-        try:
-            msg_id = int(args[0].lstrip("#"))
-        except ValueError:
+        msg_id = parse_int(args[0], strip_hash=True)
+        if msg_id is None:
             return CommandResult.fail("[BBS] ID non valido")
 
         # Get message
         message = self.message_repo.get_message_with_author(msg_id)
 
-        if not message:
+        # Messages in hidden areas are invisible to non-admins
+        if not message or (
+            message.area is not None and not can_view_area(message.area, ctx)
+        ):
             return CommandResult.fail(f"[BBS] Msg #{msg_id} non trovato")
 
         # Format response
@@ -72,22 +75,19 @@ class ReadCommand(BaseCommand):
             )
             header += f" (re: #{message.parent_id} {parent_author})"
 
-        response = (
-            f"{header}\n"
-            f"{author} ({age})\n"
-            f"{message.body}"
+        replies_suffix = (
+            f"\n[{message.reply_count} risp]" if message.reply_count > 0 else ""
         )
+        prefix = f"{header}\n{author} ({age})\n"
 
-        if message.reply_count > 0:
-            response += f"\n[{message.reply_count} risp]"
+        response = f"{prefix}{message.body}{replies_suffix}"
 
-        # Truncate body so the full response fits in ~2 mesh chunks
+        # Truncate body so the full response (including the "[n risp]"
+        # suffix) fits in ~2 mesh chunks
         if len(response) > self.MAX_RESPONSE_LENGTH:
-            overhead = len(header) + len(f"\n{author} ({age})\n")
-            max_body = self.MAX_RESPONSE_LENGTH - overhead - 5
-            truncated_body = message.body[:max_body] + "..."
-            response = f"{header}\n{author} ({age})\n{truncated_body}"
-            if message.reply_count > 0:
-                response += f"\n[{message.reply_count} risp]"
+            max_body = max(
+                0, self.MAX_RESPONSE_LENGTH - len(prefix) - len(replies_suffix) - 3
+            )
+            response = f"{prefix}{message.body[:max_body]}...{replies_suffix}"
 
         return CommandResult.ok(response)

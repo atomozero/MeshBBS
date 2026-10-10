@@ -10,6 +10,9 @@ pyserial-asyncio>=0.6
 # MQTT integration (optional)
 paho-mqtt>=2.0.0
 
+# RSS feeds for !news (pure Python, Pi-friendly)
+feedparser>=6.0.0
+
 # Web Framework
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0

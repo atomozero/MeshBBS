@@ -69,7 +69,7 @@ class TestDelPmCommand:
     async def test_delpm_no_args(self, dispatcher, sender_key, user):
         """Test /delpm without arguments."""
         response = await dispatcher.dispatch("!delpm", sender_key)
-        assert "Uso: /delpm" in response
+        assert "Uso: !delpm" in response
 
     @pytest.mark.asyncio
     async def test_delpm_invalid_id(self, dispatcher, sender_key, user):
@@ -164,7 +164,7 @@ class TestDelPmCommand:
         db_session.add(pm)
         db_session.commit()
 
-        response = await dispatcher.dispatch(f"/deletepm {pm.id}", sender_key)
+        response = await dispatcher.dispatch(f"!deletepm {pm.id}", sender_key)
         assert "eliminato" in response
 
     @pytest.mark.asyncio
@@ -178,7 +178,7 @@ class TestDelPmCommand:
         db_session.add(pm)
         db_session.commit()
 
-        response = await dispatcher.dispatch(f"/rmpm {pm.id}", sender_key)
+        response = await dispatcher.dispatch(f"!rmpm {pm.id}", sender_key)
         assert "eliminato" in response
 
 
@@ -273,7 +273,7 @@ class TestClearCommand:
         db_session.add(pm)
         db_session.commit()
 
-        response = await dispatcher.dispatch("/markread", sender_key)
+        response = await dispatcher.dispatch("!markread", sender_key)
         assert "marcati come letti" in response
 
 
@@ -349,13 +349,13 @@ class TestStatsCommand:
     @pytest.mark.asyncio
     async def test_stats_alias_stat(self, dispatcher, sender_key, user):
         """Test /stat alias."""
-        response = await dispatcher.dispatch("/stat", sender_key)
+        response = await dispatcher.dispatch("!stat", sender_key)
         assert "Stats:" in response
 
     @pytest.mark.asyncio
     async def test_stats_alias_statistics(self, dispatcher, sender_key, user):
         """Test /statistics alias."""
-        response = await dispatcher.dispatch("/statistics", sender_key)
+        response = await dispatcher.dispatch("!statistics", sender_key)
         assert "Stats:" in response
 
 
@@ -400,13 +400,13 @@ class TestInfoCommand:
     @pytest.mark.asyncio
     async def test_info_alias_about(self, dispatcher, sender_key, user):
         """Test /about alias."""
-        response = await dispatcher.dispatch("/about", sender_key)
+        response = await dispatcher.dispatch("!about", sender_key)
         assert "MeshCore BBS" in response
 
     @pytest.mark.asyncio
     async def test_info_alias_version(self, dispatcher, sender_key, user):
         """Test /version alias."""
-        response = await dispatcher.dispatch("/version", sender_key)
+        response = await dispatcher.dispatch("!version", sender_key)
         assert "v1.0.0" in response
 
 
@@ -421,7 +421,7 @@ class TestWhoisCommand:
     async def test_whois_no_args(self, dispatcher, sender_key, user):
         """Test /whois without arguments."""
         response = await dispatcher.dispatch("!whois", sender_key)
-        assert "Uso: /whois" in response
+        assert "Uso: !whois" in response
 
     @pytest.mark.asyncio
     async def test_whois_not_found(self, dispatcher, sender_key, user):
@@ -529,13 +529,13 @@ class TestWhoisCommand:
     @pytest.mark.asyncio
     async def test_whois_alias_user(self, dispatcher, sender_key, user, other_user):
         """Test /user alias."""
-        response = await dispatcher.dispatch("/user OtherUser", sender_key)
+        response = await dispatcher.dispatch("!user OtherUser", sender_key)
         assert "OtherUser" in response
 
     @pytest.mark.asyncio
     async def test_whois_alias_profile(self, dispatcher, sender_key, user, other_user):
         """Test /profile alias."""
-        response = await dispatcher.dispatch("/profile OtherUser", sender_key)
+        response = await dispatcher.dispatch("!profile OtherUser", sender_key)
         assert "OtherUser" in response
 
     @pytest.mark.asyncio
