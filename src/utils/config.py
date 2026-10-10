@@ -1,10 +1,14 @@
 """
 Configuration management for MeshCore BBS.
 
-Supports:
-- Environment variables (highest priority)
-- JSON config file (persistent settings)
-- Defaults (fallback)
+Precedence (highest first):
+1. command line arguments (launcher.py)
+2. canonical environment variables (BBS_*, see ENV_VARS)
+3. legacy unprefixed variables written by older installs (DATABASE_PATH,
+   LOG_FILE, LOG_LEVEL, SERIAL_PORT, BAUD_RATE)
+4. settings.json (runtime settings saved from the web panel), stored next
+   to the database
+5. defaults
 
 MIT License - Copyright (c) 2026 MeshBBS Contributors
 """
@@ -13,7 +17,7 @@ import os
 import json
 import logging
 from dataclasses import dataclass, field, asdict
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -43,6 +47,74 @@ UPDATABLE_FIELDS = {
     "repeater_monitor_interval_minutes",
     "repeater_monitor_targets",
 }
+
+
+# Environment variables read by Config.from_env():
+# field -> (canonical name, legacy names accepted from older installs...)
+ENV_VARS: Dict[str, Tuple[str, ...]] = {
+    "serial_port": ("BBS_SERIAL_PORT", "SERIAL_PORT"),
+    "baud_rate": ("BBS_BAUD_RATE", "BAUD_RATE"),
+    "database_path": ("BBS_DATABASE_PATH", "DATABASE_PATH"),
+    "database_key": ("BBS_DATABASE_KEY",),
+    "log_path": ("BBS_LOG_PATH", "LOG_FILE"),
+    "log_level": ("BBS_LOG_LEVEL", "LOG_LEVEL"),
+    "bbs_name": ("BBS_NAME",),
+    "default_area": ("BBS_DEFAULT_AREA",),
+    "pm_retention_days": ("BBS_PM_RETENTION_DAYS",),
+    "activity_log_retention_days": ("BBS_LOG_RETENTION_DAYS",),
+    "allow_ephemeral_pm": ("BBS_ALLOW_EPHEMERAL_PM",),
+    "latitude": ("BBS_LATITUDE",),
+    "longitude": ("BBS_LONGITUDE",),
+}
+
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+
+
+def _parse_bool(value: str) -> bool:
+    return value.strip().lower() in _TRUE_VALUES
+
+
+_ENV_CONVERTERS = {
+    "baud_rate": int,
+    "pm_retention_days": int,
+    "activity_log_retention_days": int,
+    "allow_ephemeral_pm": _parse_bool,
+    "latitude": float,
+    "longitude": float,
+}
+
+
+def env_lookup(field_name: str) -> Optional[Tuple[str, str]]:
+    """
+    Find the environment variable that sets a Config field.
+
+    Returns:
+        (variable name, raw value) of the first non-empty variable among the
+        canonical and legacy names, or None
+    """
+    for name in ENV_VARS.get(field_name, ()):
+        value = os.environ.get(name)
+        if value is not None and value.strip() != "":
+            return name, value.strip()
+    return None
+
+
+def read_env_settings() -> Dict[str, Any]:
+    """Config fields set through environment variables (converted)."""
+    values: Dict[str, Any] = {}
+    for field_name in ENV_VARS:
+        found = env_lookup(field_name)
+        if found is None:
+            continue
+        name, raw = found
+        try:
+            values[field_name] = _ENV_CONVERTERS.get(field_name, str)(raw)
+        except ValueError:
+            logger.warning(f"Ignoring invalid value for {name}: {raw!r}")
+            continue
+        if name != ENV_VARS[field_name][0]:
+            logger.info(f"Legacy variable {name} used: rename it to {ENV_VARS[field_name][0]}")
+    return values
 
 
 @dataclass
@@ -139,43 +211,47 @@ class Config:
             self.config_file_path = str(self.base_path / "data" / "settings.json")
 
     @classmethod
-    def from_env(cls) -> "Config":
-        """Create configuration from environment variables."""
-        config = cls(
-            serial_port=os.getenv("BBS_SERIAL_PORT", "/dev/ttyUSB0"),
-            baud_rate=int(os.getenv("BBS_BAUD_RATE", "115200")),
-            database_path=os.getenv("BBS_DATABASE_PATH", "data/bbs.db"),
-            database_key=os.getenv("BBS_DATABASE_KEY", None),
-            log_path=os.getenv("BBS_LOG_PATH", "logs/bbs.log"),
-            log_level=os.getenv("BBS_LOG_LEVEL", "INFO"),
-            bbs_name=os.getenv("BBS_NAME", "MeshCore BBS"),
-            default_area=os.getenv("BBS_DEFAULT_AREA", "generale"),
-            pm_retention_days=int(os.getenv("BBS_PM_RETENTION_DAYS", "30")),
-            activity_log_retention_days=int(os.getenv("BBS_LOG_RETENTION_DAYS", "90")),
-            allow_ephemeral_pm=os.getenv("BBS_ALLOW_EPHEMERAL_PM", "true").lower() == "true",
-            latitude=float(os.environ["BBS_LATITUDE"]) if "BBS_LATITUDE" in os.environ else None,
-            longitude=float(os.environ["BBS_LONGITUDE"]) if "BBS_LONGITUDE" in os.environ else None,
-        )
+    def from_env(cls, overrides: Optional[Dict[str, Any]] = None) -> "Config":
+        """
+        Create configuration from command line overrides, environment
+        variables, settings.json and defaults (in this order of precedence).
 
-        # Load persistent settings from file (overrides defaults, but env vars have priority)
-        config._load_from_file()
+        Args:
+            overrides: Field values given explicitly (e.g. CLI arguments);
+                None values are ignored
+        """
+        explicit = {k: v for k, v in (overrides or {}).items() if v is not None}
+        values = read_env_settings()
+        values.update(explicit)
+        config = cls(**values)
+
+        # settings.json lives next to the database unless given explicitly
+        if "config_file_path" not in explicit:
+            config.config_file_path = str(Path(config.database_path).parent / "settings.json")
+
+        # Persistent settings: below CLI and environment, above defaults
+        config._load_from_file(skip=set(values))
 
         return config
 
-    def _load_from_file(self) -> None:
-        """Load settings from JSON config file."""
+    def _load_from_file(self, skip: Optional[set] = None) -> None:
+        """
+        Load settings from the JSON config file.
+
+        Args:
+            skip: Fields not to override (set by CLI or environment). By
+                default, the fields set through an environment variable.
+        """
+        if skip is None:
+            skip = {f for f in ENV_VARS if env_lookup(f) is not None}
         try:
             if os.path.exists(self.config_file_path):
                 with open(self.config_file_path, "r", encoding="utf-8") as f:
                     saved = json.load(f)
 
-                # Only update fields that aren't set via environment variables
                 for key, value in saved.items():
-                    if key in UPDATABLE_FIELDS and hasattr(self, key):
-                        env_key = f"BBS_{key.upper()}"
-                        # Don't override if env var is set
-                        if env_key not in os.environ:
-                            setattr(self, key, value)
+                    if key in UPDATABLE_FIELDS and hasattr(self, key) and key not in skip:
+                        setattr(self, key, value)
 
                 logger.debug(f"Loaded settings from {self.config_file_path}")
         except Exception as e:

@@ -193,16 +193,19 @@ cat > "$MESHBBS_DATA/config.env" << EOF
 # MeshBBS Configuration
 # Edit this file to customize your BBS
 
-# BBS Identity
-BBS_NAME=MeshBBS
-BBS_WELCOME="Welcome to MeshBBS!"
+# Precedence: command line > BBS_* variables > settings.json (web panel)
+# > defaults. Legacy unprefixed names (DATABASE_PATH, LOG_FILE, LOG_LEVEL,
+# SERIAL_PORT, BAUD_RATE) are still accepted.
+
+# BBS Identity (if set here it overrides the name saved from the web panel)
+#BBS_NAME=MeshBBS
 
 # Serial Port
-SERIAL_PORT=${SERIAL_PORT}
-BAUD_RATE=115200
+BBS_SERIAL_PORT=${SERIAL_PORT}
+BBS_BAUD_RATE=115200
 
 # Database
-DATABASE_PATH=${MESHBBS_DATA}/meshbbs.db
+BBS_DATABASE_PATH=${MESHBBS_DATA}/meshbbs.db
 
 # Web Interface
 WEB_HOST=0.0.0.0
@@ -216,17 +219,13 @@ ADMIN_USERNAME=admin
 ADMIN_PASSWORD=${ADMIN_PASSWORD_GEN}
 
 # Logging
-LOG_LEVEL=INFO
-LOG_FILE=/var/log/meshbbs/meshbbs.log
+BBS_LOG_LEVEL=INFO
+BBS_LOG_PATH=/var/log/meshbbs/meshbbs.log
 
 # Backup
 BACKUP_ENABLED=true
 BACKUP_INTERVAL_HOURS=24
 BACKUP_PATH=${MESHBBS_DATA}/backups
-
-# Rate limiting
-RATE_LIMIT_ENABLED=true
-RATE_LIMIT_COMMANDS_PER_MINUTE=30
 EOF
 
 # Step 10: Create systemd service files

@@ -17,6 +17,7 @@ Usage:
 
 import asyncio
 import argparse
+import copy
 import os
 import signal
 import sys
@@ -34,8 +35,8 @@ logger = None
 from bbs.runtime import get_bbs_instance, get_event_loop
 
 
-def parse_args():
-    """Parse command line arguments."""
+def _build_parser() -> argparse.ArgumentParser:
+    """Build the command line parser."""
     parser = argparse.ArgumentParser(
         description="MeshBBS - BBS + Web Admin unified launcher",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -93,7 +94,59 @@ Examples:
     parser.add_argument("--version", action="version",
                         version="MeshBBS v1.6.0")
 
-    return parser.parse_args()
+    return parser
+
+
+def _explicit_dests(parser: argparse.ArgumentParser, argv) -> set:
+    """Names of the options actually given on the command line."""
+    probe = copy.deepcopy(parser)
+    for action in probe._actions:
+        action.default = argparse.SUPPRESS
+    namespace, _ = probe.parse_known_args(argv)
+    return set(vars(namespace))
+
+
+def parse_args(argv=None):
+    """
+    Parse command line arguments.
+
+    The returned namespace also carries ``explicit``: the options given on
+    the command line, which take precedence over environment variables
+    and settings.json (see utils.config).
+    """
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+    args.explicit = _explicit_dests(parser, argv)
+    return args
+
+
+def build_config(args) -> Config:
+    """
+    Build the BBS configuration.
+
+    Precedence: command line > BBS_* env vars > legacy env vars
+    (DATABASE_PATH, LOG_FILE, ...) > settings.json > defaults.
+    """
+    explicit = getattr(args, "explicit", set())
+    cli_fields = {
+        "port": "serial_port",
+        "baud": "baud_rate",
+        "database": "database_path",
+        "name": "bbs_name",
+        "log_file": "log_path",
+        "tcp_host": "tcp_host",
+        "tcp_port": "tcp_port",
+    }
+    overrides = {
+        field: getattr(args, dest)
+        for dest, field in cli_fields.items()
+        if dest in explicit
+    }
+    if args.tcp:
+        overrides["connection_mode"] = "tcp"
+    if args.debug:
+        overrides["log_level"] = "DEBUG"
+    return Config.from_env(overrides)
 
 
 async def run_web_server(host: str, port: int, debug: bool):
@@ -190,30 +243,17 @@ def main():
 
     args = parse_args()
 
+    # Configuration: CLI > environment > settings.json > defaults
+    config = build_config(args)
+
     # Configure logging
-    log_level = "DEBUG" if args.debug else "INFO"
-    setup_logger(name="meshbbs", log_file=args.log_file, level=log_level)
+    setup_logger(name="meshbbs", log_file=config.log_path, level=config.log_level)
     logger = get_logger("meshbbs.launcher")
 
     logger.info("=" * 50)
     logger.info("MeshBBS v1.6.0 - Unified Launcher")
     logger.info("=" * 50)
 
-    # Create BBS configuration
-    # Put settings.json next to the database file
-    db_dir = str(Path(args.database).parent)
-    config = Config(
-        connection_mode="tcp" if args.tcp else "serial",
-        serial_port=args.port,
-        baud_rate=args.baud,
-        tcp_host=args.tcp_host,
-        tcp_port=args.tcp_port,
-        database_path=args.database,
-        config_file_path=str(Path(db_dir) / "settings.json"),
-        log_path=args.log_file,
-        log_level=log_level,
-        bbs_name=args.name,
-    )
     config.ensure_directories()
     set_config(config)
 
